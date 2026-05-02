@@ -1,0 +1,66 @@
+{
+  "client_id": "moorhouse_homes",
+  "brand_name": "Moorhouse Homes",
+  "industry": "residential home building",
+  "tone": "warm, approachable, aspirational",
+  "location": {
+    "city": "Boise",
+    "state": "ID",
+    "lat": 43.6150,
+    "lng": -116.2023
+  },
+  "social": {
+    "instagram": { "account_id": "", "access_token": "" },
+    "facebook": { "page_id": "", "access_token": "" },
+    "linkedin": { "company_id": "", "access_token": "" }
+  },
+  "publer": {
+    "workspace_id": "",
+    "social_profile_ids": {
+      "instagram": "",
+      "facebook": "",
+      "linkedin": "",
+      "gbp": ""
+    }
+  },
+  "gbp": {
+    "location_id": "",
+    "account_id": "",
+    "google_credentials_file": "clients/moorhouse_homes/google_creds.json"
+  },
+  "webflow": {
+    "site_id": "",
+    "blog_collection_id": "",
+    "api_token": ""
+  },
+  "drive": {
+    "asset_folder_id": ""
+  },
+  "dataforseo": {
+    "serp_keywords": ["home builder boise", "new homes boise idaho", "custom homes boise"],
+    "grid_radius_km": 20,
+    "grid_points": 25
+  },
+  "directories_to_monitor": ["google", "yelp", "bbb", "yellowpages", "bing"],
+  "schedule": {
+    "social_posts_per_month": 12,
+    "blog_posts_per_month": 1,
+    "gbp_posts_per_month": 4,
+    "gbp_image_uploads_per_week": 1,
+    "report_day_of_month": 1,
+    "review_check_interval_hours": 24,
+    "directory_check_day_of_month": 15,
+    "serp_check_day_of_month": 1
+  },
+  "notifications": {
+    "client_email": "client@moorhousehomes.com",
+    "admin_email": "caleb@halogendesignlabs.com"
+  },
+  "portal_users": [
+    {
+      "email": "client@moorhousehomes.com",
+      "role": "client",
+      "name": "Moorhouse Homes Team"
+    }
+  ]
+}
