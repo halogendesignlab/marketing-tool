@@ -13,7 +13,7 @@ def send_content_ready(
     to: str,
     brand_name: str,
     count: int,
-    portal_url: str = "https://portal.halogendesignlabs.com",
+    portal_url: str = "https://portal.halogendesignlab.com",
 ) -> None:
     """Notify client that new content is ready for approval."""
     resend.Emails.send({
@@ -33,7 +33,7 @@ def send_report_ready(
     to: str,
     brand_name: str,
     month: str,
-    portal_url: str = "https://portal.halogendesignlabs.com",
+    portal_url: str = "https://portal.halogendesignlab.com",
 ) -> None:
     """Notify client that their monthly report is ready."""
     resend.Emails.send({
@@ -54,7 +54,7 @@ def send_review_alert(
     brand_name: str,
     platform: str,
     rating: int | None,
-    portal_url: str = "https://portal.halogendesignlabs.com",
+    portal_url: str = "https://portal.halogendesignlab.com",
 ) -> None:
     """Notify that a new review has been detected and a response is drafted."""
     stars = f"{rating}/5 stars — " if rating else ""
@@ -76,7 +76,7 @@ def send_directory_alert(
     to: str,
     brand_name: str,
     issue_count: int,
-    portal_url: str = "https://portal.halogendesignlabs.com",
+    portal_url: str = "https://portal.halogendesignlab.com",
 ) -> None:
     """Notify that directory/NAP issues were found."""
     resend.Emails.send({
@@ -98,7 +98,7 @@ def send_publish_failure(
     content_type: str,
     platform: str,
     error: str,
-    portal_url: str = "https://portal.halogendesignlabs.com",
+    portal_url: str = "https://portal.halogendesignlab.com",
 ) -> None:
     """Notify admin that a publish attempt failed."""
     resend.Emails.send({

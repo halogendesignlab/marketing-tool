@@ -12,3 +12,6 @@ node_modules/
 credentials/
 assets/
 clients/*/google_creds.json
+*.db
+requirements.local.txt
+.claude/

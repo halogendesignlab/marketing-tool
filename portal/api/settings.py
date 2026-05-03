@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
 
     # Application
     APP_ENV: str = "development"
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # Resend
     RESEND_API_KEY: str = ""
-    RESEND_FROM_EMAIL: str = "notifications@halogendesignlabs.com"
+    RESEND_FROM_EMAIL: str = "notifications@halogendesignlab.com"
 
     # DataForSEO
     DATAFORSEO_LOGIN: str = ""

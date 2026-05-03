@@ -6,7 +6,7 @@ set -e
 
 APP_DIR="/opt/marketing-tool"
 APP_USER="marketing"
-DOMAIN="${DOMAIN:-portal.halogendesignlabs.com}"
+DOMAIN="${DOMAIN:-portal.halogendesignlab.com}"
 
 echo "==> Installing system dependencies"
 apt-get update -q
@@ -43,7 +43,7 @@ ln -sf /etc/nginx/sites-available/marketing-tool /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx
 
 echo "==> Obtaining SSL certificate"
-certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m hello@halogendesignlabs.com
+certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m hello@halogendesignlab.com
 
 echo ""
 echo "==> Setup complete!"
