@@ -49,9 +49,10 @@ def approve_item(
             detail=f"Item is not pending approval (current status: {item.status})"
         )
 
-    # Allow editing body on approval
     if payload.body:
         item.body = payload.body
+    if payload.image_url:
+        item.image_url = payload.image_url
     if payload.scheduled_for:
         item.scheduled_for = payload.scheduled_for
 

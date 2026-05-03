@@ -2,11 +2,13 @@
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .settings import get_settings
-from .routes import auth, clients, content, approvals, assets, reports, reviews, directories
+from .routes import auth, clients, content, approvals, assets, reports, reviews, directories, media
 from .database import engine, Base
 
 logger = logging.getLogger(__name__)
@@ -70,6 +72,12 @@ def create_app() -> FastAPI:
     app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
     app.include_router(reviews.router, prefix="/api/reviews", tags=["reviews"])
     app.include_router(directories.router, prefix="/api/directories", tags=["directories"])
+    app.include_router(media.router, prefix="/api/media", tags=["media"])
+
+    # Serve uploaded images publicly so Publer can download them
+    uploads_dir = Path(__file__).parent.parent.parent / "uploads"
+    uploads_dir.mkdir(exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
     @app.get("/api/health")
     def health():

@@ -51,9 +51,22 @@ export async function getContentItems(params?: Record<string, string | number>) 
   return res.data;
 }
 
-export async function approveContent(id: number, body?: string, scheduledFor?: string) {
-  const res = await api.post(`/api/approvals/${id}/approve`, { body, scheduled_for: scheduledFor });
+export async function approveContent(id: number, body?: string, imageUrl?: string, scheduledFor?: string) {
+  const res = await api.post(`/api/approvals/${id}/approve`, {
+    body,
+    image_url: imageUrl,
+    scheduled_for: scheduledFor,
+  });
   return res.data;
+}
+
+export async function uploadMedia(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await api.post("/api/media/upload", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data.url;
 }
 
 export async function rejectContent(id: number, reason?: string) {

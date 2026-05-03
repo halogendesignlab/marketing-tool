@@ -59,7 +59,8 @@ class ContentItemResponse(BaseModel):
 
 
 class ApproveContentRequest(BaseModel):
-    body: Optional[str] = None       # allow editing body on approval
+    body: Optional[str] = None
+    image_url: Optional[str] = None
     scheduled_for: Optional[datetime] = None
 
 
