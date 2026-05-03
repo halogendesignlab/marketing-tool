@@ -195,8 +195,9 @@ def publish_approved_content_job(client_id: str):
                         body=item.body,
                         platforms=[item.platform.value],
                         image_url=item.image_url,
+                        as_draft=False,
                     )
-                    item.publer_post_id = str(result.get("id", ""))
+                    item.publer_post_id = str(result.get("job_id", ""))
 
                 elif item.content_type == ContentType.gbp_post:
                     result = publish_gbp_post(
@@ -204,7 +205,7 @@ def publish_approved_content_job(client_id: str):
                         body=item.body,
                         image_url=item.image_url,
                     )
-                    item.publer_post_id = str(result.get("id", ""))
+                    item.publer_post_id = str(result.get("job_id", ""))
 
                 elif item.content_type == ContentType.blog_post:
                     publish_blog_post(

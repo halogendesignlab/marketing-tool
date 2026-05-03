@@ -104,7 +104,78 @@ def _get_item(item_id: int, current_user: User, db: Session) -> ContentItem:
 
 
 def _maybe_publish_now(item_id: int):
-    """If the item has no scheduled_for or it's in the past, mark it for immediate publish.
-    The scheduler picks up 'approved' items and publishes them."""
-    # Publishing is handled by the scheduler — this is a hook for future immediate-publish logic
-    pass
+    """Publish the item immediately if it has no future scheduled_for date."""
+    from ..database import SessionLocal
+    from ..models import ContentItem, ContentStatus, ContentType, Platform
+    from core.config_loader import load_client_config
+    from core.publer_publisher import publish_social_post, publish_gbp_post
+    from core.webflow_publisher import publish_blog_post
+    from datetime import datetime, timezone
+    import logging
+
+    logger = logging.getLogger(__name__)
+    db = SessionLocal()
+    now = datetime.now(timezone.utc)
+
+    try:
+        item = db.query(ContentItem).filter(ContentItem.id == item_id).first()
+        if not item:
+            return
+
+        # Only publish if no future schedule date
+        if item.scheduled_for and item.scheduled_for > now:
+            return
+
+        from portal.api.models import Client
+        client_row = db.query(Client).filter(Client.id == item.client_id).first()
+        if not client_row:
+            return
+
+        config = load_client_config(client_row.client_id)
+
+        item.status = ContentStatus.scheduled
+        db.commit()
+
+        if item.content_type == ContentType.social_caption and item.platform:
+            result = publish_social_post(
+                config=config,
+                body=item.body,
+                platforms=[item.platform.value],
+                image_url=item.image_url,
+                as_draft=False,
+            )
+            item.publer_post_id = str(result.get("job_id", ""))
+
+        elif item.content_type == ContentType.gbp_post:
+            result = publish_gbp_post(
+                config=config,
+                body=item.body,
+                image_url=item.image_url,
+            )
+            item.publer_post_id = str(result.get("job_id", ""))
+
+        elif item.content_type == ContentType.blog_post:
+            publish_blog_post(
+                config=config,
+                title=item.title or "Untitled",
+                body=item.body,
+                publish_immediately=True,
+            )
+
+        item.status = ContentStatus.published
+        item.published_at = now
+        db.commit()
+        logger.info(f"Published content item {item_id} ({item.content_type})")
+
+    except Exception as e:
+        logger.error(f"Failed to publish item {item_id}: {e}")
+        try:
+            item = db.query(ContentItem).filter(ContentItem.id == item_id).first()
+            if item:
+                item.status = ContentStatus.failed
+                item.error_message = str(e)
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
