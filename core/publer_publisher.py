@@ -12,6 +12,14 @@ settings = get_settings()
 
 BASE_URL = "https://app.publer.com/api/v1"
 
+# Maps our platform names to Publer's networks key
+NETWORK_KEY = {
+    "instagram": "instagram",
+    "facebook": "facebook",
+    "linkedin": "linkedin",
+    "gbp": "google",
+}
+
 
 def _headers(workspace_id: str) -> dict:
     return {
@@ -22,7 +30,6 @@ def _headers(workspace_id: str) -> dict:
 
 
 def _auth_headers(workspace_id: str) -> dict:
-    """Auth headers without Content-Type (for multipart uploads)."""
     return {
         "Authorization": f"Bearer-API {settings.PUBLER_API_KEY}",
         "Publer-Workspace-Id": workspace_id,
@@ -30,7 +37,6 @@ def _auth_headers(workspace_id: str) -> dict:
 
 
 def _account_ids(config: ClientConfig, platforms: list[str]) -> list[str]:
-    """Get Publer account IDs for the requested platforms."""
     if not config.publer:
         raise ValueError(f"No Publer config for client {config.client_id}")
     ids = config.publer.social_profile_ids
@@ -48,16 +54,16 @@ def _workspace_id(config: ClientConfig) -> str:
     return config.publer.workspace_id
 
 
-def upload_media(image_url: str, workspace_id: str) -> str:
-    """Upload an image to Publer. Accepts a full URL or a relative /uploads/ path."""
+def upload_media(image_url: str, workspace_id: str) -> dict:
+    """Upload an image to Publer. Accepts a full URL or a relative /uploads/ path.
+    Returns the media object {"id": ..., "type": "photo"}."""
     if image_url.startswith("/uploads/"):
-        # Read from local disk — faster and avoids needing a public URL
         local_path = UPLOADS_DIR / image_url.removeprefix("/uploads/")
         image_bytes = local_path.read_bytes()
         filename = local_path.name
-        suffix = local_path.suffix.lower()
+        suffix = local_path.suffix.lower().lstrip(".")
         content_type = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
-                        "webp": "image/webp", "gif": "image/gif"}.get(suffix.lstrip("."), "image/jpeg")
+                        "webp": "image/webp", "gif": "image/gif"}.get(suffix, "image/jpeg")
     else:
         with httpx.Client(timeout=60) as client:
             img_resp = client.get(image_url)
@@ -73,7 +79,8 @@ def upload_media(image_url: str, workspace_id: str) -> str:
             files={"file": (filename, image_bytes, content_type)},
         )
         upload_resp.raise_for_status()
-        return upload_resp.json()["id"]
+        data = upload_resp.json()
+        return {"id": data["id"], "type": data.get("type", "photo")}
 
 
 def publish_social_post(
@@ -92,6 +99,11 @@ def publish_social_post(
     workspace_id = _workspace_id(config)
     state = "draft" if as_draft else "scheduled"
 
+    # Upload media once and reuse across all platforms
+    media_obj = None
+    if image_url:
+        media_obj = upload_media(image_url, workspace_id)
+
     accounts_payload = []
     for aid in account_ids:
         entry: dict = {"id": aid}
@@ -99,19 +111,19 @@ def publish_social_post(
             entry["scheduled_at"] = scheduled_for.isoformat()
         accounts_payload.append(entry)
 
-    post: dict = {
-        "text": body,
-        "accounts": accounts_payload,
-    }
-
-    if image_url:
-        media_id = upload_media(image_url, workspace_id)
-        post["media"] = [{"id": media_id}]
+    # Build the networks object — text and media must live inside each network key
+    networks: dict = {}
+    for platform in platforms:
+        net_key = NETWORK_KEY.get(platform, platform)
+        net: dict = {"type": "photo" if media_obj else "status", "text": body}
+        if media_obj:
+            net["media"] = [media_obj]
+        networks[net_key] = net
 
     payload = {
         "bulk": {
             "state": state,
-            "posts": [post],
+            "posts": [{"networks": networks, "accounts": accounts_payload}],
         }
     }
 
@@ -156,7 +168,7 @@ def upload_gbp_photo(
         raise ValueError(f"No GBP account ID configured for client {config.client_id}")
 
     workspace_id = _workspace_id(config)
-    media_id = upload_media(image_url, workspace_id)
+    media_obj = upload_media(image_url, workspace_id)
 
     entry: dict = {"id": gbp_id}
     if scheduled_for:
@@ -165,13 +177,16 @@ def upload_gbp_photo(
     payload = {
         "bulk": {
             "state": "scheduled",
-            "posts": [
-                {
-                    "text": "",
-                    "media": [{"id": media_id}],
-                    "accounts": [entry],
-                }
-            ],
+            "posts": [{
+                "networks": {
+                    "google": {
+                        "type": "photo",
+                        "text": "",
+                        "media": [media_obj],
+                    }
+                },
+                "accounts": [entry],
+            }],
         }
     }
 
