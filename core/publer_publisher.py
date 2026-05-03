@@ -2,8 +2,11 @@
 
 import httpx
 from datetime import datetime
+from pathlib import Path
 from .config_loader import ClientConfig
 from portal.api.settings import get_settings
+
+UPLOADS_DIR = Path(__file__).parent.parent / "uploads"
 
 settings = get_settings()
 
@@ -46,24 +49,31 @@ def _workspace_id(config: ClientConfig) -> str:
 
 
 def upload_media(image_url: str, workspace_id: str) -> str:
-    """Download an image from a URL and upload it to Publer. Returns the Publer media ID."""
-    with httpx.Client(timeout=60) as client:
-        # Download the image
-        img_resp = client.get(image_url)
-        img_resp.raise_for_status()
-        image_bytes = img_resp.content
-        content_type = img_resp.headers.get("content-type", "image/jpeg")
-        filename = image_url.split("/")[-1].split("?")[0] or "image.jpg"
+    """Upload an image to Publer. Accepts a full URL or a relative /uploads/ path."""
+    if image_url.startswith("/uploads/"):
+        # Read from local disk — faster and avoids needing a public URL
+        local_path = UPLOADS_DIR / image_url.removeprefix("/uploads/")
+        image_bytes = local_path.read_bytes()
+        filename = local_path.name
+        suffix = local_path.suffix.lower()
+        content_type = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+                        "webp": "image/webp", "gif": "image/gif"}.get(suffix.lstrip("."), "image/jpeg")
+    else:
+        with httpx.Client(timeout=60) as client:
+            img_resp = client.get(image_url)
+            img_resp.raise_for_status()
+            image_bytes = img_resp.content
+            content_type = img_resp.headers.get("content-type", "image/jpeg")
+            filename = image_url.split("/")[-1].split("?")[0] or "image.jpg"
 
-        # Upload to Publer as multipart form
+    with httpx.Client(timeout=60) as client:
         upload_resp = client.post(
             f"{BASE_URL}/media",
             headers=_auth_headers(workspace_id),
             files={"file": (filename, image_bytes, content_type)},
         )
         upload_resp.raise_for_status()
-        data = upload_resp.json()
-        return data["id"]
+        return upload_resp.json()["id"]
 
 
 def publish_social_post(
