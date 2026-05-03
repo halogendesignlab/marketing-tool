@@ -195,7 +195,7 @@ def publish_approved_content_job(client_id: str):
                         body=item.body,
                         platforms=[item.platform.value],
                         image_url=item.image_url,
-                        as_draft=False,
+                        scheduled_for=item.scheduled_for,
                     )
                     item.publer_post_id = str(result.get("job_id", ""))
 

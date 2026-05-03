@@ -89,7 +89,7 @@ def publish_social_post(
     platforms: list[str],
     image_url: str | None = None,
     scheduled_for: datetime | None = None,
-    as_draft: bool = True,
+    as_draft: bool = False,
 ) -> dict:
     """Publish or draft a social media post via Publer."""
     account_ids = _account_ids(config, platforms)
@@ -97,7 +97,13 @@ def publish_social_post(
         raise ValueError(f"No Publer account IDs found for platforms: {platforms}")
 
     workspace_id = _workspace_id(config)
-    state = "draft" if as_draft else "scheduled"
+
+    if as_draft:
+        state = "draft"
+    elif scheduled_for:
+        state = "scheduled"
+    else:
+        state = "auto"  # let Publer queue at optimal time
 
     # Upload media once and reuse across all platforms
     media_obj = None
