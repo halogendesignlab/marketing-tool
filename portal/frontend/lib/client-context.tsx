@@ -23,7 +23,6 @@ interface ClientContextType {
 const ClientContext = createContext<ClientContextType | null>(null);
 
 /** Map the raw API ClientResponse shape → SelectedClient */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapClient(c: any): SelectedClient {
   return {
     id: c.id,
@@ -56,7 +55,6 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     // Admins get all clients; client-role users get only their assigned ones.
     setLoadingClients(true);
     getClients()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((list: any[]) => {
         const mapped = list.map(mapClient);
         setClients(mapped);
