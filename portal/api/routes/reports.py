@@ -95,12 +95,16 @@ def trigger_report(
 
 def _run_report_bg(month: int, year: int, client_id_filter: Optional[str] = None):
     from core.config_loader import load_all_clients
-    from core.report_generator import generate_monthly_report
+    from core.report_generator import generate_monthly_report, run_serp_checks
     import logging
     logger = logging.getLogger(__name__)
     for config in load_all_clients():
         if client_id_filter and config.client_id != client_id_filter:
             continue
+        try:
+            run_serp_checks(config, month, year)
+        except Exception as e:
+            logger.error(f"SERP check failed for {config.client_id}: {e}")
         try:
             generate_monthly_report(config, month, year)
         except Exception as e:
