@@ -42,10 +42,10 @@ interface MediaItem {
 }
 
 const PLATFORM_COLORS: Record<string, string> = {
-  instagram: "bg-pink-50 text-pink-700 border-pink-200",
-  facebook: "bg-blue-50 text-blue-700 border-blue-200",
-  linkedin: "bg-sky-50 text-sky-700 border-sky-200",
-  gbp: "bg-green-50 text-green-700 border-green-200",
+  instagram: "bg-ink-500 text-fg-2 border-ink-600",
+  facebook: "bg-ink-500 text-fg-2 border-ink-600",
+  linkedin: "bg-ink-500 text-fg-2 border-ink-600",
+  gbp: "bg-ink-500 text-fg-2 border-ink-600",
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -55,12 +55,12 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
-  pending_approval: { label: "Pending approval", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  client_review:    { label: "Awaiting client",  cls: "bg-purple-50 text-purple-700 border-purple-200" },
-  approved:         { label: "Approved",          cls: "bg-blue-50 text-blue-700 border-blue-200" },
-  scheduled:        { label: "Scheduled",         cls: "bg-sky-50 text-sky-700 border-sky-200" },
-  published:        { label: "Posted",            cls: "bg-green-50 text-green-700 border-green-200" },
-  rejected:         { label: "Rejected",          cls: "bg-red-50 text-red-600 border-red-200" },
+  pending_approval: { label: "Pending approval", cls: "bg-ink-500 text-signal-warn border-ink-600" },
+  client_review:    { label: "Awaiting client",  cls: "bg-ink-500 text-plasma border-ink-600" },
+  approved:         { label: "Approved",          cls: "bg-ink-500 text-signal-good border-ink-600" },
+  scheduled:        { label: "Scheduled",         cls: "bg-ink-500 text-tint border-ink-600" },
+  published:        { label: "Posted",            cls: "bg-ink-500 text-signal-good border-ink-600" },
+  rejected:         { label: "Rejected",          cls: "bg-ink-500 text-signal-bad border-ink-600" },
 };
 
 // Status filter tabs shown to admins
@@ -76,9 +76,9 @@ const STATUS_TABS = [
 // ── Generate wizard (admin only) ──────────────────────────────────────────────
 
 const POST_TYPES = [
-  { key: "social_caption", label: "Social Caption", desc: "Generate captions for Instagram, Facebook, LinkedIn, or GBP from a photo", icon: "📸" },
-  { key: "blog_post", label: "Blog Post", desc: "AI-written 400–600 word blog draft for your website", icon: "✍️" },
-  { key: "gbp_post", label: "GBP Post", desc: "150–300 word Google Business Profile post", icon: "📍" },
+  { key: "social_caption", label: "Social Caption", desc: "Generate captions for Instagram, Facebook, LinkedIn, or GBP from a photo" },
+  { key: "blog_post", label: "Blog Post", desc: "AI-written 400–600 word blog draft for your website" },
+  { key: "gbp_post", label: "GBP Post", desc: "150–300 word Google Business Profile post" },
 ];
 
 const PLATFORMS = [
@@ -141,29 +141,28 @@ function GenerateWizard({ onClose, onCreated, selectedClientId }: {
   const imgSrc = (url: string) => url.startsWith("http") ? url : `${API_BASE}${url}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-ink-800 border border-ink-600 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-ink-600">
           <div className="flex items-center gap-3">
-            {step !== "type" && <button onClick={() => setStep("type")} className="text-gray-400 hover:text-gray-700 text-sm">←</button>}
-            <h2 className="font-semibold text-gray-900">
-              {step === "type" && "Generate Post"}
+            {step !== "type" && <button onClick={() => setStep("type")} className="text-fg-3 hover:text-fg-1 font-sans text-sm transition-colors duration-150">←</button>}
+            <h2 className="font-sans font-semibold text-fg-1">
+              {step === "type" && "Generate post"}
               {step === "config" && POST_TYPES.find((t) => t.key === postType)?.label}
               {step === "generating" && "Generating…"}
             </h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-lg leading-none">✕</button>
+          <button onClick={onClose} className="text-fg-3 hover:text-fg-1 text-lg leading-none transition-colors duration-150">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto p-6">
           {step === "type" && (
             <div className="grid gap-3">
               {POST_TYPES.map((t) => (
                 <button key={t.key} onClick={() => { setPostType(t.key); setStep("config"); }}
-                  className="flex items-start gap-4 p-4 rounded-xl border border-gray-200 hover:border-gray-400 hover:bg-gray-50 text-left transition-colors group">
-                  <span className="text-2xl mt-0.5">{t.icon}</span>
+                  className="flex items-start gap-4 p-4 rounded-xl border border-ink-600 hover:border-tint bg-ink-700 text-left transition-colors duration-150 group">
                   <div>
-                    <p className="font-medium text-gray-900">{t.label}</p>
-                    <p className="text-sm text-gray-500 mt-0.5">{t.desc}</p>
+                    <p className="font-sans font-medium text-fg-1">{t.label}</p>
+                    <p className="text-sm text-fg-3 mt-0.5 font-sans">{t.desc}</p>
                   </div>
                 </button>
               ))}
@@ -172,14 +171,14 @@ function GenerateWizard({ onClose, onCreated, selectedClientId }: {
           {step === "config" && postType === "social_caption" && (
             <div className="space-y-5">
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-1">Platforms</p>
-                <p className="text-xs text-gray-400 mb-2">Select one or more — the same caption and image will be posted to all.</p>
+                <p className="text-sm font-sans font-medium text-fg-2 mb-1">Platforms</p>
+                <p className="text-xs text-fg-3 font-sans mb-2">Select one or more — the same caption and image will be posted to all.</p>
                 <div className="flex gap-2 flex-wrap">
                   {PLATFORMS.map((p) => {
                     const active = platforms.includes(p.key);
                     return (
                       <button key={p.key} onClick={() => togglePlatform(p.key)}
-                        className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${active ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}>
+                        className={`px-3 py-1.5 rounded-md border font-sans text-sm font-medium transition-colors duration-150 ${active ? "bg-tint text-ink-900 border-tint" : "border-ink-600 text-fg-2 hover:border-tint"}`}>
                         {active && <span className="mr-1.5">✓</span>}{p.label}
                       </button>
                     );
@@ -187,55 +186,55 @@ function GenerateWizard({ onClose, onCreated, selectedClientId }: {
                 </div>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Select a photo</p>
-                {loadingMedia ? <p className="text-sm text-gray-400">Loading photos…</p>
-                  : mediaItems.length === 0 ? <p className="text-sm text-gray-400">No photos in media library yet.</p>
+                <p className="text-sm font-sans font-medium text-fg-2 mb-2">Select a photo</p>
+                {loadingMedia ? <p className="text-sm text-fg-3 font-sans">Loading photos…</p>
+                  : mediaItems.length === 0 ? <p className="text-sm text-fg-3 font-sans">No photos in media library yet.</p>
                   : (
                     <div className="grid grid-cols-4 gap-2 max-h-72 overflow-y-auto pr-1">
                       {mediaItems.map((m) => (
                         <button key={m.id} onClick={() => setSelectedMedia(m)}
-                          className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${selectedMedia?.id === m.id ? "border-gray-900 ring-2 ring-gray-900 ring-offset-1" : "border-transparent hover:border-gray-300"}`}
+                          className={`relative aspect-square rounded-md overflow-hidden border-2 transition-all ${selectedMedia?.id === m.id ? "border-tint ring-2 ring-tint ring-offset-1 ring-offset-ink-800" : "border-transparent hover:border-ink-600"}`}
                           title={m.meta?.project || m.filename}>
                           <img src={imgSrc(m.url)} alt={m.filename} className="w-full h-full object-cover" loading="lazy" />
                           {selectedMedia?.id === m.id && (
                             <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                              <span className="bg-white rounded-full w-6 h-6 flex items-center justify-center text-gray-900 text-xs font-bold shadow">✓</span>
+                              <span className="bg-tint rounded-full w-6 h-6 flex items-center justify-center text-ink-900 text-xs font-bold shadow">✓</span>
                             </div>
                           )}
                         </button>
                       ))}
                     </div>
                   )}
-                {selectedMedia && <p className="text-xs text-gray-500 mt-2 truncate">Selected: {selectedMedia.meta?.project ? `${selectedMedia.meta.project} — ` : ""}{selectedMedia.filename}</p>}
+                {selectedMedia && <p className="text-xs text-fg-3 font-sans mt-2 truncate">Selected: {selectedMedia.meta?.project ? `${selectedMedia.meta.project} — ` : ""}{selectedMedia.filename}</p>}
               </div>
             </div>
           )}
           {step === "config" && (postType === "blog_post" || postType === "gbp_post") && (
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1.5">
-                  Topic <span className="font-normal text-gray-400">(optional)</span>
+                <label className="text-sm font-sans font-medium text-fg-2 block mb-1.5">
+                  Topic <span className="font-normal text-fg-3">(optional)</span>
                 </label>
                 <textarea value={topic} onChange={(e) => setTopic(e.target.value)}
                   placeholder={postType === "blog_post" ? "e.g. Tips for choosing a custom home builder in Boise" : "e.g. New parade home now open for tours"}
-                  rows={3} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none" />
-                <p className="text-xs text-gray-400 mt-1">Leave blank to let AI choose a relevant topic.</p>
+                  rows={3} className="input resize-none" />
+                <p className="text-xs text-fg-3 font-sans mt-1">Leave blank to let AI choose a relevant topic.</p>
               </div>
             </div>
           )}
           {step === "generating" && (
             <div className="flex flex-col items-center justify-center py-12 gap-3">
-              <div className="w-8 h-8 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-gray-500">Claude is writing your draft…</p>
+              <div className="w-8 h-8 border-2 border-tint border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-fg-3 font-sans">Claude is writing your draft…</p>
             </div>
           )}
         </div>
         {step === "config" && (
-          <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-900">Cancel</button>
+          <div className="px-6 py-4 border-t border-ink-600 flex justify-end gap-3">
+            <button onClick={onClose} className="btn-ghost">Cancel</button>
             <button onClick={handleGenerate}
               disabled={(postType === "social_caption" && !selectedMedia) || (postType === "social_caption" && platforms.length === 0)}
-              className="px-5 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 disabled:opacity-40 transition-colors">
+              className="btn-primary disabled:opacity-40">
               Generate
             </button>
           </div>
@@ -274,18 +273,18 @@ function ImagePickerModal({ clientId, currentUrl, onSelect, onClose }: {
   const imgSrc = (url: string) => url.startsWith("http") ? url : `${API_BASE}${url}`;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <h2 className="font-semibold text-gray-900">Choose image</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-lg leading-none">✕</button>
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-ink-800 border border-ink-600 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-ink-600 shrink-0">
+          <h2 className="font-sans font-semibold text-fg-1">Choose image</h2>
+          <button onClick={onClose} className="text-fg-3 hover:text-fg-1 text-lg leading-none transition-colors duration-150">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
           {loading && items.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-8">Loading photos…</p>
+            <p className="text-sm text-fg-3 font-sans text-center py-8">Loading photos…</p>
           )}
           {!loading && items.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-8">No photos in media library yet.</p>
+            <p className="text-sm text-fg-3 font-sans text-center py-8">No photos in media library yet.</p>
           )}
           <div className="grid grid-cols-4 gap-2">
             {items.map((m) => {
@@ -295,13 +294,13 @@ function ImagePickerModal({ clientId, currentUrl, onSelect, onClose }: {
                 <button
                   key={m.id}
                   onClick={() => { onSelect(m.url); onClose(); }}
-                  className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${isSelected ? "border-gray-900 ring-2 ring-gray-900 ring-offset-1" : "border-transparent hover:border-gray-300"}`}
+                  className={`relative aspect-square rounded-md overflow-hidden border-2 transition-all ${isSelected ? "border-tint ring-2 ring-tint ring-offset-1 ring-offset-ink-800" : "border-transparent hover:border-ink-600"}`}
                   title={m.meta?.project || m.filename}
                 >
                   <img src={src} alt={m.filename} className="w-full h-full object-cover" loading="lazy" />
                   {isSelected && (
                     <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                      <span className="bg-white rounded-full w-6 h-6 flex items-center justify-center text-gray-900 text-xs font-bold shadow">✓</span>
+                      <span className="bg-tint rounded-full w-6 h-6 flex items-center justify-center text-ink-900 text-xs font-bold shadow">✓</span>
                     </div>
                   )}
                 </button>
@@ -313,21 +312,21 @@ function ImagePickerModal({ clientId, currentUrl, onSelect, onClose }: {
               <button
                 onClick={() => { const next = offset + PAGE; setOffset(next); load(next); }}
                 disabled={loading}
-                className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                className="btn-ghost disabled:opacity-50"
               >
                 {loading ? "Loading…" : "Load more"}
               </button>
             </div>
           )}
         </div>
-        <div className="px-6 py-3 border-t border-gray-100 shrink-0 flex justify-between items-center">
+        <div className="px-6 py-3 border-t border-ink-600 shrink-0 flex justify-between items-center">
           <button
             onClick={() => { onSelect(""); onClose(); }}
-            className="text-sm text-gray-400 hover:text-gray-600"
+            className="text-sm text-fg-3 hover:text-fg-2 font-sans transition-colors duration-150"
           >
             Remove image
           </button>
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-900">Cancel</button>
+          <button onClick={onClose} className="btn-ghost">Cancel</button>
         </div>
       </div>
     </div>
@@ -360,7 +359,6 @@ function DraftCard({ item, isAdmin, clientId, onApprove, onApproveScheduled, onR
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectComment, setRejectComment] = useState("");
 
-  const platformColor = item.platform ? PLATFORM_COLORS[item.platform] ?? "bg-gray-50 text-gray-600 border-gray-200" : "";
   const displayImageUrl = editing ? editImageUrl : item.image_url;
   const imgSrc = displayImageUrl
     ? displayImageUrl.startsWith("http") ? displayImageUrl : `${API_BASE}${displayImageUrl}`
@@ -406,25 +404,25 @@ function DraftCard({ item, isAdmin, clientId, onApprove, onApproveScheduled, onR
       {/* Full post modal */}
       {showFullPost && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100 shrink-0">
-              <h2 className="font-semibold text-gray-900 text-base">{item.title || "Blog Post"}</h2>
-              <button onClick={() => setShowFullPost(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
+          <div className="bg-ink-800 border border-ink-600 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-8 py-5 border-b border-ink-600 shrink-0">
+              <h2 className="font-sans font-semibold text-fg-1 text-base">{item.title || "Blog Post"}</h2>
+              <button onClick={() => setShowFullPost(false)} className="text-fg-3 hover:text-fg-1 text-xl leading-none transition-colors duration-150">✕</button>
             </div>
-            <div className="flex-1 overflow-y-auto px-8 py-6 prose prose-gray max-w-none" dangerouslySetInnerHTML={{ __html: item.body }} />
-            <div className="flex items-center gap-3 px-8 py-4 border-t border-gray-100 shrink-0">
+            <div className="flex-1 overflow-y-auto px-8 py-6 prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: item.body }} />
+            <div className="flex items-center gap-3 px-8 py-4 border-t border-ink-600 shrink-0">
               <button onClick={() => { onApprove(item.id, currentBody, editImageUrl ?? undefined); setShowFullPost(false); }}
-                className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+                className="btn-primary">
                 {isAdmin ? "Approve" : "Post now"}
               </button>
               {isAdmin ? (
                 <button onClick={() => { onDelete(item.id); setShowFullPost(false); }}
-                  className="ml-auto text-sm text-red-400 hover:text-red-600 transition-colors">
+                  className="ml-auto text-sm text-signal-bad hover:opacity-80 font-sans transition-opacity duration-150">
                   Discard
                 </button>
               ) : (
                 <button onClick={() => { setShowFullPost(false); setShowRejectModal(true); }}
-                  className="ml-auto text-sm text-red-400 hover:text-red-600 transition-colors">
+                  className="ml-auto text-sm text-signal-bad hover:opacity-80 font-sans transition-opacity duration-150">
                   Reject
                 </button>
               )}
@@ -435,20 +433,20 @@ function DraftCard({ item, isAdmin, clientId, onApprove, onApproveScheduled, onR
 
       {/* Schedule modal (client only) */}
       {showSchedule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h2 className="font-semibold text-gray-900 mb-4">Schedule post</h2>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Date &amp; time</label>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-ink-800 border border-ink-600 rounded-xl shadow-2xl w-full max-w-sm p-6">
+            <h2 className="font-sans font-semibold text-fg-1 mb-4">Schedule post</h2>
+            <label className="block text-xs font-sans font-medium text-fg-2 mb-1.5">Date &amp; time</label>
             <input
               type="datetime-local"
               value={scheduleDate}
               onChange={(e) => setScheduleDate(e.target.value)}
               min={new Date().toISOString().slice(0, 16)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 mb-4"
+              className="input mb-4"
             />
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowSchedule(false)} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-900">Cancel</button>
-              <button onClick={handleConfirmSchedule} className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+              <button onClick={() => setShowSchedule(false)} className="btn-ghost">Cancel</button>
+              <button onClick={handleConfirmSchedule} className="btn-primary">
                 Schedule
               </button>
             </div>
@@ -458,24 +456,24 @@ function DraftCard({ item, isAdmin, clientId, onApprove, onApproveScheduled, onR
 
       {/* Reject with comment modal (client) */}
       {showRejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h2 className="font-semibold text-gray-900 mb-2">Reject this post</h2>
-            <p className="text-sm text-gray-500 mb-4">Let us know what needs to change and we&apos;ll revise it.</p>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">
-              Comments <span className="font-normal text-gray-400">(optional)</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-ink-800 border border-ink-600 rounded-xl shadow-2xl w-full max-w-sm p-6">
+            <h2 className="font-sans font-semibold text-fg-1 mb-2">Reject this post</h2>
+            <p className="text-sm text-fg-3 font-sans mb-4">Let us know what needs to change and we&apos;ll revise it.</p>
+            <label className="block text-xs font-sans font-medium text-fg-2 mb-1.5">
+              Comments <span className="font-normal text-fg-3">(optional)</span>
             </label>
             <textarea
               value={rejectComment}
               onChange={(e) => setRejectComment(e.target.value)}
               placeholder="e.g. The caption is too long, please shorten it"
               rows={4}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none mb-4"
+              className="input resize-none mb-4"
             />
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => { setShowRejectModal(false); setRejectComment(""); }}
-                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-900"
+                className="btn-ghost"
               >
                 Cancel
               </button>
@@ -485,7 +483,7 @@ function DraftCard({ item, isAdmin, clientId, onApprove, onApproveScheduled, onR
                   setShowRejectModal(false);
                   setRejectComment("");
                 }}
-                className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+                className="px-4 py-2 bg-signal-bad text-ink-900 font-sans font-semibold text-sm rounded-md hover:opacity-90 transition-opacity duration-150"
               >
                 Reject
               </button>
@@ -494,41 +492,41 @@ function DraftCard({ item, isAdmin, clientId, onApprove, onApproveScheduled, onR
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-ink-700 rounded-xl border border-ink-600 overflow-hidden">
         <div className="flex gap-4 p-5">
           {imgSrc && (
             <div className="shrink-0">
-              <img src={imgSrc} alt="post image" className="w-24 h-24 object-cover rounded-lg border border-gray-200" />
+              <img src={imgSrc} alt="post image" className="w-24 h-24 object-cover rounded-md border border-ink-600" />
             </div>
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <span className="text-xs font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-sans font-medium bg-ink-500 text-fg-2 px-2 py-0.5 rounded-md border border-ink-600">
                 {TYPE_LABELS[item.content_type] ?? item.content_type}
               </span>
               {(item.meta?.platforms ?? (item.platform ? [item.platform] : [])).map((p) => (
-                <span key={p} className={`text-xs font-medium px-2 py-0.5 rounded-full border capitalize ${PLATFORM_COLORS[p] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>{p}</span>
+                <span key={p} className={`text-xs font-sans font-medium px-2 py-0.5 rounded-md border capitalize ${PLATFORM_COLORS[p] ?? "bg-ink-500 text-fg-2 border-ink-600"}`}>{p}</span>
               ))}
               {isAdmin && STATUS_CONFIG[item.status] && (
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${STATUS_CONFIG[item.status].cls}`}>
+                <span className={`text-xs font-sans font-medium px-2 py-0.5 rounded-md border ${STATUS_CONFIG[item.status].cls}`}>
                   {STATUS_CONFIG[item.status].label}
                 </span>
               )}
               {item.scheduled_for && item.status === "scheduled" && (
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-fg-3 font-sans">
                   {new Date(item.scheduled_for).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                 </span>
               )}
             </div>
-            {item.title && <p className="font-medium text-gray-900 text-sm mb-1.5 truncate">{item.title}</p>}
+            {item.title && <p className="font-sans font-medium text-fg-1 text-sm mb-1.5 truncate">{item.title}</p>}
             {editing ? (
               <textarea value={editBody} onChange={(e) => setEditBody(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900 min-h-[140px] resize-y font-mono" />
+                className="input min-h-[140px] resize-y font-mono" />
             ) : item.content_type === "blog_post" ? (
-              <div className="text-sm text-gray-700 leading-relaxed line-clamp-6 prose prose-sm max-w-none prose-headings:font-semibold prose-headings:text-gray-900 prose-p:my-1"
+              <div className="text-sm text-fg-2 leading-relaxed line-clamp-6 prose prose-invert prose-sm max-w-none prose-headings:font-sans prose-headings:font-semibold prose-headings:text-fg-1 prose-p:my-1"
                 dangerouslySetInnerHTML={{ __html: item.body }} />
             ) : (
-              <p className="text-sm text-gray-700 leading-relaxed line-clamp-4 whitespace-pre-wrap">{item.body}</p>
+              <p className="text-sm text-fg-2 leading-relaxed line-clamp-4 whitespace-pre-wrap font-mono">{item.body}</p>
             )}
           </div>
         </div>
@@ -536,127 +534,126 @@ function DraftCard({ item, isAdmin, clientId, onApprove, onApproveScheduled, onR
         {/* ── Rejection reason callout (admin view) ── */}
         {isAdmin && item.status === "rejected" && item.rejection_reason && (
           <div className="mx-5 mb-1 mt-0">
-            <div className="flex gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
-              <span className="shrink-0">💬</span>
-              <div><span className="font-medium">Client note: </span>{item.rejection_reason}</div>
+            <div className="flex gap-2 text-sm text-signal-bad bg-ink-500 border border-ink-600 rounded-md px-3 py-2.5">
+              <div><span className="font-sans font-medium">Client note: </span>{item.rejection_reason}</div>
             </div>
           </div>
         )}
 
         {/* ── Admin actions: pending_approval ── */}
         {isAdmin && item.status === "pending_approval" && (
-          <div className="flex items-center gap-2 px-5 py-3 bg-gray-50 border-t border-gray-100 flex-wrap">
+          <div className="flex items-center gap-2 px-5 py-3 bg-ink-800 border-t border-ink-600 flex-wrap">
             <button onClick={() => onApprove(item.id, editing ? editBody : undefined, editImageUrl ?? undefined)}
-              className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+              className="btn-primary">
               Approve &amp; post
             </button>
             <button onClick={handleSendToClient} disabled={sending}
-              className="px-4 py-1.5 border border-gray-200 text-gray-700 text-sm rounded-lg hover:bg-white transition-colors disabled:opacity-50">
+              className="btn-ghost disabled:opacity-50">
               {sending ? "Sending…" : "Send to client"}
             </button>
             {editing ? (
-              <button onClick={() => setEditing(false)} className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-white transition-colors">Done editing</button>
+              <button onClick={() => setEditing(false)} className="btn-ghost">Done editing</button>
             ) : (
-              <button onClick={() => { setEditing(true); setEditBody(item.body); setEditImageUrl(item.image_url); }} className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-white transition-colors">Edit</button>
+              <button onClick={() => { setEditing(true); setEditBody(item.body); setEditImageUrl(item.image_url); }} className="btn-ghost">Edit</button>
             )}
             {editing && (
-              <button onClick={() => setShowImagePicker(true)} className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-white transition-colors">
+              <button onClick={() => setShowImagePicker(true)} className="btn-ghost">
                 {editImageUrl ? "Change image" : "Add image"}
               </button>
             )}
             {item.image_url && !editing && (
-              <button onClick={handleRegenerate} disabled={regenerating} className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-white transition-colors disabled:opacity-50">
+              <button onClick={handleRegenerate} disabled={regenerating} className="btn-ghost disabled:opacity-50">
                 {regenerating ? "…" : "Regenerate"}
               </button>
             )}
             {item.content_type === "blog_post" && (
-              <button onClick={() => setShowFullPost(true)} className="text-sm text-gray-500 hover:text-gray-900 transition-colors">Read post →</button>
+              <button onClick={() => setShowFullPost(true)} className="text-sm text-fg-3 hover:text-fg-1 font-sans transition-colors duration-150">Read post →</button>
             )}
-            <button onClick={() => onDelete(item.id)} className="ml-auto text-sm text-red-400 hover:text-red-600 transition-colors">Discard</button>
+            <button onClick={() => onDelete(item.id)} className="ml-auto text-sm text-signal-bad hover:opacity-80 font-sans transition-opacity duration-150">Discard</button>
           </div>
         )}
 
         {/* ── Admin actions: awaiting client ── */}
         {isAdmin && item.status === "client_review" && (
-          <div className="flex items-center gap-2 px-5 py-3 bg-gray-50 border-t border-gray-100">
+          <div className="flex items-center gap-2 px-5 py-3 bg-ink-800 border-t border-ink-600">
             {item.content_type === "blog_post" && (
-              <button onClick={() => setShowFullPost(true)} className="text-sm text-gray-500 hover:text-gray-900 transition-colors">Read post →</button>
+              <button onClick={() => setShowFullPost(true)} className="text-sm text-fg-3 hover:text-fg-1 font-sans transition-colors duration-150">Read post →</button>
             )}
-            <button onClick={() => onRecall(item.id)} className="ml-auto px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-white transition-colors">
+            <button onClick={() => onRecall(item.id)} className="ml-auto btn-ghost">
               Recall
             </button>
-            <button onClick={() => onDelete(item.id)} className="text-sm text-red-400 hover:text-red-600 transition-colors">Discard</button>
+            <button onClick={() => onDelete(item.id)} className="text-sm text-signal-bad hover:opacity-80 font-sans transition-opacity duration-150">Discard</button>
           </div>
         )}
 
         {/* ── Admin: rejected — full action bar to revise or delete ── */}
         {isAdmin && item.status === "rejected" && (
-          <div className="flex items-center gap-2 px-5 py-3 bg-gray-50 border-t border-gray-100 flex-wrap">
+          <div className="flex items-center gap-2 px-5 py-3 bg-ink-800 border-t border-ink-600 flex-wrap">
             <button onClick={() => onApprove(item.id, editing ? editBody : undefined, editImageUrl ?? undefined)}
-              className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+              className="btn-primary">
               Approve &amp; post
             </button>
             <button onClick={handleSendToClient} disabled={sending}
-              className="px-4 py-1.5 border border-gray-200 text-gray-700 text-sm rounded-lg hover:bg-white transition-colors disabled:opacity-50">
+              className="btn-ghost disabled:opacity-50">
               {sending ? "Sending…" : "Re-send to client"}
             </button>
             {editing ? (
-              <button onClick={() => setEditing(false)} className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-white transition-colors">Done editing</button>
+              <button onClick={() => setEditing(false)} className="btn-ghost">Done editing</button>
             ) : (
-              <button onClick={() => { setEditing(true); setEditBody(item.body); setEditImageUrl(item.image_url); }} className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-white transition-colors">Edit</button>
+              <button onClick={() => { setEditing(true); setEditBody(item.body); setEditImageUrl(item.image_url); }} className="btn-ghost">Edit</button>
             )}
             {editing && (
-              <button onClick={() => setShowImagePicker(true)} className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-white transition-colors">
+              <button onClick={() => setShowImagePicker(true)} className="btn-ghost">
                 {editImageUrl ? "Change image" : "Add image"}
               </button>
             )}
             {item.image_url && !editing && (
-              <button onClick={handleRegenerate} disabled={regenerating} className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-white transition-colors disabled:opacity-50">
+              <button onClick={handleRegenerate} disabled={regenerating} className="btn-ghost disabled:opacity-50">
                 {regenerating ? "…" : "Regenerate"}
               </button>
             )}
             {item.content_type === "blog_post" && (
-              <button onClick={() => setShowFullPost(true)} className="text-sm text-gray-500 hover:text-gray-900 transition-colors">Read post →</button>
+              <button onClick={() => setShowFullPost(true)} className="text-sm text-fg-3 hover:text-fg-1 font-sans transition-colors duration-150">Read post →</button>
             )}
-            <button onClick={() => onDelete(item.id)} className="ml-auto text-sm text-red-400 hover:text-red-600 transition-colors">Discard</button>
+            <button onClick={() => onDelete(item.id)} className="ml-auto text-sm text-signal-bad hover:opacity-80 font-sans transition-opacity duration-150">Discard</button>
           </div>
         )}
 
         {/* ── Admin: read-only footer for other terminal statuses (with Discard) ── */}
         {isAdmin && ["published", "scheduled", "approved"].includes(item.status) && (
-          <div className="flex items-center gap-2 px-5 py-3 bg-gray-50 border-t border-gray-100">
+          <div className="flex items-center gap-2 px-5 py-3 bg-ink-800 border-t border-ink-600">
             {item.content_type === "blog_post" && (
-              <button onClick={() => setShowFullPost(true)} className="text-sm text-gray-500 hover:text-gray-900 transition-colors">Read post →</button>
+              <button onClick={() => setShowFullPost(true)} className="text-sm text-fg-3 hover:text-fg-1 font-sans transition-colors duration-150">Read post →</button>
             )}
-            <button onClick={() => onDelete(item.id)} className="ml-auto text-sm text-red-400 hover:text-red-600 transition-colors">Discard</button>
+            <button onClick={() => onDelete(item.id)} className="ml-auto text-sm text-signal-bad hover:opacity-80 font-sans transition-opacity duration-150">Discard</button>
           </div>
         )}
 
         {/* ── Client actions ── */}
         {!isAdmin && (
-          <div className="flex items-center gap-2 px-5 py-3 bg-gray-50 border-t border-gray-100 flex-wrap">
+          <div className="flex items-center gap-2 px-5 py-3 bg-ink-800 border-t border-ink-600 flex-wrap">
             <button onClick={() => onApprove(item.id, editing ? editBody : undefined, editImageUrl ?? undefined)}
-              className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+              className="btn-primary">
               Post now
             </button>
             <button onClick={() => setShowSchedule(true)}
-              className="px-4 py-1.5 border border-gray-200 text-gray-700 text-sm rounded-lg hover:bg-white transition-colors">
+              className="btn-ghost">
               Schedule
             </button>
             {editing ? (
-              <button onClick={() => setEditing(false)} className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-white transition-colors">Done editing</button>
+              <button onClick={() => setEditing(false)} className="btn-ghost">Done editing</button>
             ) : (
-              <button onClick={() => { setEditing(true); setEditBody(item.body); setEditImageUrl(item.image_url); }} className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-white transition-colors">Edit</button>
+              <button onClick={() => { setEditing(true); setEditBody(item.body); setEditImageUrl(item.image_url); }} className="btn-ghost">Edit</button>
             )}
             {editing && (
-              <button onClick={() => setShowImagePicker(true)} className="px-4 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-white transition-colors">
+              <button onClick={() => setShowImagePicker(true)} className="btn-ghost">
                 {editImageUrl ? "Change image" : "Add image"}
               </button>
             )}
             {item.content_type === "blog_post" && (
-              <button onClick={() => setShowFullPost(true)} className="text-sm text-gray-500 hover:text-gray-900 transition-colors">Read post →</button>
+              <button onClick={() => setShowFullPost(true)} className="text-sm text-fg-3 hover:text-fg-1 font-sans transition-colors duration-150">Read post →</button>
             )}
-            <button onClick={() => setShowRejectModal(true)} className="ml-auto text-sm text-red-400 hover:text-red-600 transition-colors">Reject</button>
+            <button onClick={() => setShowRejectModal(true)} className="ml-auto text-sm text-signal-bad hover:opacity-80 font-sans transition-opacity duration-150">Reject</button>
           </div>
         )}
       </div>
@@ -755,31 +752,31 @@ export default function ApprovalsPage() {
     : { title: "Nothing to review", sub: "You're all caught up. Check back when new content is ready for your approval." };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ink-900">
       <Nav />
       <main className="max-w-3xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-semibold text-gray-900">
+          <h1 className="font-sans font-semibold text-fg-1 text-xl">
             {isAdmin ? "Drafts" : "Approvals"}
           </h1>
           {isAdmin && (
             <button onClick={() => setShowWizard(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
-              <span className="text-base leading-none">+</span> Generate Post
+              className="btn-primary flex items-center gap-2">
+              <span className="text-base leading-none">+</span> Generate post
             </button>
           )}
         </div>
 
         {isAdmin && (
-          <div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
+          <div className="flex gap-1 mb-6 border-b border-ink-600 overflow-x-auto">
             {STATUS_TABS.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setStatusFilter(tab.key)}
-                className={`px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors -mb-px ${
+                className={`px-3 py-2 font-sans text-sm font-medium whitespace-nowrap border-b-2 transition-colors duration-150 -mb-px ${
                   statusFilter === tab.key
-                    ? "border-gray-900 text-gray-900"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
+                    ? "border-tint text-fg-1"
+                    : "border-transparent text-fg-3 hover:text-fg-2"
                 }`}
               >
                 {tab.label}
@@ -788,15 +785,15 @@ export default function ApprovalsPage() {
           </div>
         )}
 
-        {fetching && <p className="text-sm text-gray-400">Loading…</p>}
+        {fetching && <p className="text-sm text-fg-3 font-sans">Loading…</p>}
 
         {!fetching && items.length === 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-            <p className="text-gray-900 font-medium mb-1">{emptyMessage.title}</p>
-            <p className="text-sm text-gray-400 mb-4">{emptyMessage.sub}</p>
+          <div className="bg-ink-700 rounded-xl border border-ink-600 p-12 text-center">
+            <p className="font-sans font-medium text-fg-1 mb-1">{emptyMessage.title}</p>
+            <p className="text-sm text-fg-3 font-sans mb-4">{emptyMessage.sub}</p>
             {isAdmin && (
-              <button onClick={() => setShowWizard(true)} className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
-                Generate Post
+              <button onClick={() => setShowWizard(true)} className="btn-primary">
+                Generate post
               </button>
             )}
           </div>

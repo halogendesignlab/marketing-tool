@@ -71,7 +71,7 @@ function FolderNode({
   return (
     <div>
       <div
-        className={`flex items-center gap-1 px-2 py-1 rounded-md cursor-pointer group text-sm ${isSelected ? "bg-gray-900 text-white" : "text-gray-700 hover:bg-gray-100"}`}
+        className={`flex items-center gap-1 px-2 py-1 rounded-md cursor-pointer group text-sm font-sans transition-colors duration-150 ${isSelected ? "bg-tint text-ink-900" : "text-fg-2 hover:bg-ink-600"}`}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
         onClick={() => onSelect(folder.id)}
       >
@@ -85,12 +85,12 @@ function FolderNode({
         )}
         {folder.children.length === 0 && <span className="w-4" />}
         <span className="truncate flex-1">{folder.name}</span>
-        <span className={`text-xs shrink-0 ${isSelected ? "text-gray-300" : "text-gray-400"}`}>
+        <span className={`text-xs shrink-0 ${isSelected ? "text-ink-900/70" : "text-fg-3"}`}>
           {folder.item_count}
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(folder.id, folder.name); }}
-          className={`opacity-0 group-hover:opacity-100 ml-1 shrink-0 ${isSelected ? "text-gray-300 hover:text-white" : "text-gray-400 hover:text-red-500"}`}
+          className={`opacity-0 group-hover:opacity-100 ml-1 shrink-0 transition-opacity duration-150 ${isSelected ? "text-ink-900/60 hover:text-ink-900" : "text-fg-3 hover:text-signal-bad"}`}
           title="Delete folder"
         >
           ✕
@@ -291,21 +291,21 @@ export default function MediaPage() {
 
   const folderLabel =
     selectedFolder === "all"
-      ? "All Media"
+      ? "All media"
       : selectedFolder === "unorganized"
       ? "Unorganized"
       : flattenFolders(folders).find((f) => f.id === selectedFolder)?.name ?? "Folder";
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ink-900">
       <Nav />
       <div className="flex" style={{ height: "calc(100vh - 53px)" }}>
         {/* ── Sidebar ── */}
-        <aside className="w-56 bg-white border-r border-gray-200 flex flex-col overflow-y-auto shrink-0">
-          <div className="p-3 border-b border-gray-100">
+        <aside className="w-56 bg-ink-800 border-r border-ink-600 flex flex-col overflow-y-auto shrink-0">
+          <div className="p-3 border-b border-ink-600">
             <button
               onClick={() => setShowNewFolder(true)}
-              className="w-full text-left text-xs text-gray-500 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-50 transition-colors"
+              className="w-full text-left text-xs text-fg-3 hover:text-fg-1 font-sans px-2 py-1 rounded-md hover:bg-ink-600 transition-colors duration-150"
             >
               + New folder
             </button>
@@ -320,12 +320,12 @@ export default function MediaPage() {
                     if (e.key === "Escape") { setShowNewFolder(false); setNewFolderName(""); }
                   }}
                   placeholder="Folder name"
-                  className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-gray-900"
+                  className="flex-1 bg-ink-700 border border-ink-600 rounded-md px-2 py-1 text-xs text-fg-1 placeholder-fg-3 focus:outline-none focus:border-tint transition-colors duration-150"
                 />
                 <button
                   onClick={handleCreateFolder}
                   disabled={creatingFolder}
-                  className="text-xs bg-gray-900 text-white px-2 py-1 rounded disabled:opacity-50"
+                  className="text-xs bg-tint text-ink-900 font-sans font-semibold px-2 py-1 rounded-md disabled:opacity-50"
                 >
                   OK
                 </button>
@@ -336,19 +336,19 @@ export default function MediaPage() {
           <nav className="flex-1 p-2 space-y-0.5">
             <button
               onClick={() => setSelectedFolder("all")}
-              className={`w-full text-left px-2 py-1 rounded-md text-sm transition-colors ${selectedFolder === "all" ? "bg-gray-900 text-white" : "text-gray-700 hover:bg-gray-100"}`}
+              className={`w-full text-left px-2 py-1 rounded-md font-sans text-sm transition-colors duration-150 ${selectedFolder === "all" ? "bg-tint text-ink-900" : "text-fg-2 hover:bg-ink-600"}`}
             >
-              All Media
+              All media
             </button>
             <button
               onClick={() => setSelectedFolder("unorganized")}
-              className={`w-full text-left px-2 py-1 rounded-md text-sm transition-colors ${selectedFolder === "unorganized" ? "bg-gray-900 text-white" : "text-gray-700 hover:bg-gray-100"}`}
+              className={`w-full text-left px-2 py-1 rounded-md font-sans text-sm transition-colors duration-150 ${selectedFolder === "unorganized" ? "bg-tint text-ink-900" : "text-fg-2 hover:bg-ink-600"}`}
             >
               Unorganized
             </button>
 
             {folders.length > 0 && (
-              <div className="pt-1 mt-1 border-t border-gray-100">
+              <div className="pt-1 mt-1 border-t border-ink-600">
                 {folders.map((folder) => (
                   <FolderNode
                     key={folder.id}
@@ -367,10 +367,10 @@ export default function MediaPage() {
         <main className="flex-1 overflow-y-auto p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <h1 className="text-lg font-semibold text-gray-900">{folderLabel}</h1>
+              <h1 className="font-sans font-semibold text-fg-1 text-lg">{folderLabel}</h1>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-400">{items.length} item{items.length !== 1 ? "s" : ""}</span>
+              <span className="text-sm text-fg-3 font-sans">{items.length} item{items.length !== 1 ? "s" : ""}</span>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -382,7 +382,7 @@ export default function MediaPage() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="px-3 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                className="btn-primary disabled:opacity-50"
               >
                 {uploading ? "Uploading…" : "Upload"}
               </button>
@@ -396,13 +396,13 @@ export default function MediaPage() {
               placeholder="Search by name or project…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 w-56"
+              className="bg-ink-700 border border-ink-600 rounded-md px-3 py-1.5 text-sm text-fg-1 placeholder-fg-3 focus:outline-none focus:border-tint transition-colors duration-150 w-56 font-mono"
             />
             {availableFilters.categories.length > 0 && (
               <select
                 value={filterCategory}
                 onChange={(e) => { setFilterCategory(e.target.value); setFilterProject(""); }}
-                className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="bg-ink-700 border border-ink-600 rounded-md px-2 py-1.5 text-sm text-fg-2 font-sans focus:outline-none focus:border-tint transition-colors duration-150"
               >
                 <option value="">All categories</option>
                 {availableFilters.categories.map((c) => (
@@ -414,7 +414,7 @@ export default function MediaPage() {
               <select
                 value={filterProject}
                 onChange={(e) => setFilterProject(e.target.value)}
-                className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400 max-w-[220px]"
+                className="bg-ink-700 border border-ink-600 rounded-md px-2 py-1.5 text-sm text-fg-2 font-sans focus:outline-none focus:border-tint transition-colors duration-150 max-w-[220px]"
               >
                 <option value="">All projects</option>
                 {availableFilters.projects
@@ -428,7 +428,7 @@ export default function MediaPage() {
               <select
                 value={filterPhotoType}
                 onChange={(e) => setFilterPhotoType(e.target.value)}
-                className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="bg-ink-700 border border-ink-600 rounded-md px-2 py-1.5 text-sm text-fg-2 font-sans focus:outline-none focus:border-tint transition-colors duration-150"
               >
                 <option value="">All types</option>
                 {availableFilters.photo_types.map((t) => (
@@ -439,7 +439,7 @@ export default function MediaPage() {
             {(search || filterCategory || filterProject || filterPhotoType) && (
               <button
                 onClick={() => { setSearch(""); setFilterCategory(""); setFilterProject(""); setFilterPhotoType(""); }}
-                className="text-xs text-gray-400 hover:text-gray-700 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                className="text-xs text-fg-3 hover:text-fg-1 font-sans px-2 py-1.5 rounded-md hover:bg-ink-600 transition-colors duration-150"
               >
                 Clear filters
               </button>
@@ -449,21 +449,21 @@ export default function MediaPage() {
           {/* Pagination */}
           {totalItems > PAGE_SIZE && (
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-fg-3 font-sans">
                 {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalItems)} of {totalItems}
               </span>
               <div className="flex gap-2">
                 <button
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
-                  className="px-3 py-1 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50"
+                  className="btn-ghost py-1 px-3 disabled:opacity-40"
                 >
                   ← Prev
                 </button>
                 <button
                   onClick={() => setPage((p) => p + 1)}
                   disabled={(page + 1) * PAGE_SIZE >= totalItems}
-                  className="px-3 py-1 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50"
+                  className="btn-ghost py-1 px-3 disabled:opacity-40"
                 >
                   Next →
                 </button>
@@ -476,16 +476,16 @@ export default function MediaPage() {
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={onDrop}
-            className={`rounded-xl border-2 border-dashed transition-colors mb-4 ${dragOver ? "border-gray-400 bg-gray-100" : "border-transparent"}`}
+            className={`rounded-xl border-2 border-dashed transition-colors duration-150 mb-4 ${dragOver ? "border-tint bg-ink-700" : "border-transparent"}`}
           >
             {fetching && (
-              <p className="text-gray-400 text-sm text-center py-8">Loading…</p>
+              <p className="text-fg-3 font-sans text-sm text-center py-8">Loading…</p>
             )}
 
             {!fetching && items.length === 0 && (
-              <div className="text-center py-16 text-gray-400">
-                <p className="text-sm">No images yet.</p>
-                <p className="text-xs mt-1">Drag and drop files here or click Upload.</p>
+              <div className="text-center py-16 text-fg-3">
+                <p className="text-sm font-sans">No images yet.</p>
+                <p className="text-xs font-sans mt-1">Drag and drop files here or click Upload.</p>
               </div>
             )}
 
@@ -524,11 +524,11 @@ function MediaCard({
   const src = item.url.startsWith("drive://")
     ? `${API_BASE}/api/media/drive-preview/${item.url.replace("drive://", "")}?token=${token}`
     : item.url.startsWith("http")
-    ? item.url  // R2 or other public URL — load directly
-    : `${API_BASE}${item.url}`; // local /uploads/ path
+    ? item.url
+    : `${API_BASE}${item.url}`;
 
   return (
-    <div className="relative group rounded-lg overflow-hidden border border-gray-200 bg-white aspect-square">
+    <div className="relative group rounded-md overflow-hidden border border-ink-600 bg-ink-700 aspect-square">
       <img
         src={src}
         alt={item.filename}
@@ -538,11 +538,11 @@ function MediaCard({
         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
       />
       {/* Overlay on hover */}
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors flex flex-col justify-between p-2 opacity-0 group-hover:opacity-100">
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors duration-150 flex flex-col justify-between p-2 opacity-0 group-hover:opacity-100">
         <div className="flex justify-end gap-1">
           <button
             onClick={() => setShowMenu(!showMenu)}
-            className="bg-white rounded-full w-6 h-6 flex items-center justify-center text-gray-600 hover:bg-gray-100 text-xs shadow"
+            className="bg-ink-800 border border-ink-600 rounded-md w-6 h-6 flex items-center justify-center text-fg-2 hover:text-fg-1 text-xs transition-colors duration-150"
             title="Move to folder"
           >
             ⋯
@@ -550,33 +550,33 @@ function MediaCard({
         </div>
         <div className="space-y-1">
           {item.meta?.project && (
-            <p className="text-white text-xs font-medium drop-shadow leading-tight">{item.meta.project}</p>
+            <p className="text-white text-xs font-sans font-medium drop-shadow leading-tight">{item.meta.project}</p>
           )}
           {(item.meta?.category || item.meta?.photo_type) && (
             <div className="flex flex-wrap gap-1">
               {item.meta.category && (
-                <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded-full leading-tight">
+                <span className="bg-white/20 text-white text-[10px] font-sans px-1.5 py-0.5 rounded leading-tight">
                   {item.meta.category}
                 </span>
               )}
               {item.meta.photo_type && (
-                <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded-full leading-tight">
+                <span className="bg-white/20 text-white text-[10px] font-sans px-1.5 py-0.5 rounded leading-tight">
                   {item.meta.photo_type}
                 </span>
               )}
             </div>
           )}
-          <p className="text-white/70 text-[10px] truncate drop-shadow">{item.filename}</p>
+          <p className="text-white/70 text-[10px] font-mono truncate drop-shadow">{item.filename}</p>
         </div>
       </div>
 
       {/* Move menu */}
       {showMenu && (
-        <div className="absolute top-8 right-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1 min-w-[140px]">
-          <p className="text-xs text-gray-400 px-3 py-1">Move to…</p>
+        <div className="absolute top-8 right-2 bg-ink-800 border border-ink-600 rounded-md shadow-lg z-10 py-1 min-w-[140px]">
+          <p className="text-xs text-fg-3 font-sans px-3 py-1">Move to…</p>
           <button
             onClick={() => { onMove(item, null); setShowMenu(false); }}
-            className="w-full text-left text-sm px-3 py-1 hover:bg-gray-50 text-gray-700"
+            className="w-full text-left font-sans text-sm px-3 py-1 hover:bg-ink-600 text-fg-2 hover:text-fg-1 transition-colors duration-150"
           >
             Root (unorganized)
           </button>
@@ -584,14 +584,14 @@ function MediaCard({
             <button
               key={f.id}
               onClick={() => { onMove(item, f.id); setShowMenu(false); }}
-              className="w-full text-left text-sm px-3 py-1 hover:bg-gray-50 text-gray-700 truncate"
+              className="w-full text-left font-sans text-sm px-3 py-1 hover:bg-ink-600 text-fg-2 hover:text-fg-1 transition-colors duration-150 truncate"
             >
               {f.name}
             </button>
           ))}
           <button
             onClick={() => setShowMenu(false)}
-            className="w-full text-left text-xs px-3 py-1 text-gray-400 hover:bg-gray-50"
+            className="w-full text-left text-xs font-sans px-3 py-1 text-fg-3 hover:bg-ink-600 transition-colors duration-150"
           >
             Cancel
           </button>

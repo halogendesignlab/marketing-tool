@@ -49,17 +49,17 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ink-900">
       <Nav />
       <main className="max-w-md mx-auto px-6 py-12">
-        <h1 className="text-xl font-semibold text-gray-900 mb-1">Account</h1>
-        <p className="text-sm text-gray-500 mb-8">{user.email}</p>
+        <h1 className="font-sans font-semibold text-fg-1 text-xl mb-1">Account</h1>
+        <p className="text-sm text-fg-3 font-sans mb-8">{user.email}</p>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-sm font-medium text-gray-700 mb-5">Change password</h2>
+        <div className="bg-ink-700 rounded-xl border border-ink-600 p-6">
+          <h2 className="font-sans font-medium text-fg-2 text-sm mb-5">Change password</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="block text-xs font-sans font-medium text-fg-2 mb-1">
                 Current password
               </label>
               <input
@@ -72,7 +72,7 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="block text-xs font-sans font-medium text-fg-2 mb-1">
                 New password
               </label>
               <input
@@ -85,7 +85,7 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
+              <label className="block text-xs font-sans font-medium text-fg-2 mb-1">
                 Confirm new password
               </label>
               <input
@@ -99,17 +99,17 @@ export default function ProfilePage() {
             </div>
 
             {error && (
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-signal-bad font-sans">{error}</p>
             )}
             {success && (
-              <p className="text-sm text-green-600">Password updated successfully.</p>
+              <p className="text-sm text-signal-good font-sans">Password updated successfully.</p>
             )}
 
             <div className="pt-1">
               <button
                 type="submit"
                 disabled={saving}
-                className="w-full py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                className="btn-primary w-full flex items-center justify-center disabled:opacity-50"
               >
                 {saving ? "Updating…" : "Update password"}
               </button>

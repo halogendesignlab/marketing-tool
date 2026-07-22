@@ -35,42 +35,42 @@ export default function DashboardPage() {
   if (!ready) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ink-900">
       <Nav />
       <main className="max-w-5xl mx-auto px-6 py-8">
-        <h1 className="text-xl font-semibold text-gray-900 mb-6">Dashboard</h1>
+        <h1 className="font-sans font-semibold text-fg-1 text-xl mb-6">Dashboard</h1>
 
         <div className="grid grid-cols-2 gap-4 mb-8">
           <Link
             href="/approvals"
-            className="bg-white rounded-xl border border-gray-200 p-5 hover:border-gray-300 transition-colors block"
+            className="bg-ink-700 rounded-xl border border-ink-600 p-5 hover:border-tint transition-colors duration-150 block"
           >
-            <div className={`text-3xl font-semibold mb-1 ${(stats?.pendingApprovals ?? 0) > 0 ? "text-gray-900" : "text-gray-400"}`}>
+            <div className="font-sans text-xs text-fg-3 uppercase tracking-widest mb-2">Pending approvals</div>
+            <div className={`text-3xl font-semibold mb-1 font-sans ${(stats?.pendingApprovals ?? 0) > 0 ? "text-fg-1" : "text-fg-3"}`}>
               {stats?.pendingApprovals ?? "—"}
             </div>
-            <div className="text-sm text-gray-500">Pending approvals</div>
           </Link>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className={`text-3xl font-semibold mb-1 ${(stats?.unrepliedReviews ?? 0) > 0 ? "text-gray-900" : "text-gray-400"}`}>
+          <div className="bg-ink-700 rounded-xl border border-ink-600 p-5">
+            <div className="font-sans text-xs text-fg-3 uppercase tracking-widest mb-2">Reviews without response</div>
+            <div className={`text-3xl font-semibold mb-1 font-sans ${(stats?.unrepliedReviews ?? 0) > 0 ? "text-fg-1" : "text-fg-3"}`}>
               {stats?.unrepliedReviews ?? "—"}
             </div>
-            <div className="text-sm text-gray-500">Google reviews without response</div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-sm font-medium text-gray-700 mb-4">Quick actions</h2>
+        <div className="bg-ink-700 rounded-xl border border-ink-600 p-6">
+          <h2 className="font-sans font-semibold text-fg-1 text-sm mb-4">Quick actions</h2>
           <div className="flex gap-3 flex-wrap">
             <Link
               href="/approvals"
-              className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors"
+              className="btn-primary"
             >
               Review pending content
             </Link>
             <Link
               href="/reports"
-              className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors"
+              className="btn-ghost"
             >
               View reports
             </Link>

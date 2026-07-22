@@ -188,27 +188,27 @@ export default function AdminUsersPage() {
   const inactiveUsers = users.filter((u) => !u.is_active);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ink-900">
       <Nav />
       <main className="max-w-5xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-semibold text-gray-900">Users</h1>
+          <h1 className="font-sans font-semibold text-fg-1 text-xl">Users</h1>
           <button
             onClick={() => { setShowInvite(true); setInviteError(""); }}
-            className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors"
+            className="btn-primary"
           >
             Add user
           </button>
         </div>
 
-        {fetching && <p className="text-sm text-gray-400">Loading…</p>}
+        {fetching && <p className="text-sm text-fg-3 font-sans">Loading…</p>}
 
         {!fetching && (
           <div className="space-y-6">
             <UserTable users={activeUsers} onEdit={openEdit} onToggle={toggleActive} />
             {inactiveUsers.length > 0 && (
               <div>
-                <h2 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
+                <h2 className="text-xs font-sans font-medium text-fg-3 uppercase tracking-wider mb-3">
                   Deactivated ({inactiveUsers.length})
                 </h2>
                 <UserTable users={inactiveUsers} onEdit={openEdit} onToggle={toggleActive} dimmed />
@@ -261,10 +261,10 @@ export default function AdminUsersPage() {
                         key={c.id}
                         type="button"
                         onClick={() => toggleClientInEdit(c.id)}
-                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                        className={`px-3 py-1 rounded-md text-xs font-sans font-medium border transition-colors duration-150 ${
                           selected
-                            ? "bg-gray-900 text-white border-gray-900"
-                            : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                            ? "bg-tint text-ink-900 border-tint"
+                            : "bg-ink-700 text-fg-2 border-ink-600 hover:border-tint"
                         }`}
                       >
                         {c.brand_name}
@@ -273,7 +273,7 @@ export default function AdminUsersPage() {
                   })}
                 </div>
                 {editState.client_ids.length === 0 && (
-                  <p className="text-xs text-amber-600 mt-1">No clients assigned — user won&apos;t see any data.</p>
+                  <p className="text-xs text-signal-warn font-sans mt-1">No clients assigned — user won&apos;t see any data.</p>
                 )}
               </Field>
             )}
@@ -292,22 +292,22 @@ export default function AdminUsersPage() {
                 type="checkbox"
                 checked={editState.is_active}
                 onChange={(e) => setEditState({ ...editState, is_active: e.target.checked })}
-                className="h-4 w-4 rounded border-gray-300 text-gray-900"
+                className="h-4 w-4 rounded border-ink-600 bg-ink-700 text-tint focus:ring-tint focus:ring-offset-ink-800"
               />
-              <span className="text-sm text-gray-700">Active</span>
+              <span className="text-sm font-sans text-fg-2">Active</span>
             </label>
-            {editError && <p className="text-sm text-red-600">{editError}</p>}
+            {editError && <p className="text-sm text-signal-bad font-sans">{editError}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setEditTarget(null)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                className="btn-ghost"
               >
                 Cancel
               </button>
               <button
                 onClick={saveEdit}
                 disabled={editSaving}
-                className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                className="btn-primary disabled:opacity-50"
               >
                 {editSaving ? "Saving…" : "Save"}
               </button>
@@ -372,18 +372,18 @@ export default function AdminUsersPage() {
                 onChange={(e) => setInviteState({ ...inviteState, password: e.target.value })}
               />
             </Field>
-            {inviteError && <p className="text-sm text-red-600">{inviteError}</p>}
+            {inviteError && <p className="text-sm text-signal-bad font-sans">{inviteError}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setShowInvite(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                className="btn-ghost"
               >
                 Cancel
               </button>
               <button
                 onClick={saveInvite}
                 disabled={inviteSaving}
-                className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                className="btn-primary disabled:opacity-50"
               >
                 {inviteSaving ? "Creating…" : "Create user"}
               </button>
@@ -411,10 +411,10 @@ function UserTable({
   if (users.length === 0) return null;
 
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 overflow-hidden ${dimmed ? "opacity-60" : ""}`}>
+    <div className={`bg-ink-700 rounded-xl border border-ink-600 overflow-hidden ${dimmed ? "opacity-60" : ""}`}>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase tracking-wider">
+          <tr className="border-b border-ink-600 text-xs text-fg-3 font-sans uppercase tracking-wider">
             <th className="text-left px-5 py-3 font-medium">Name</th>
             <th className="text-left px-5 py-3 font-medium">Email</th>
             <th className="text-left px-5 py-3 font-medium">Role</th>
@@ -427,56 +427,56 @@ function UserTable({
           {users.map((u, i) => (
             <tr
               key={u.id}
-              className={`${i > 0 ? "border-t border-gray-50" : ""} hover:bg-gray-50/60 transition-colors`}
+              className={`${i > 0 ? "border-t border-ink-600" : ""} hover:bg-ink-600/30 transition-colors duration-150`}
             >
-              <td className="px-5 py-3 font-medium text-gray-900">{u.name}</td>
-              <td className="px-5 py-3 text-gray-500">{u.email}</td>
+              <td className="px-5 py-3 font-sans font-medium text-fg-1">{u.name}</td>
+              <td className="px-5 py-3 font-mono text-sm text-fg-3">{u.email}</td>
               <td className="px-5 py-3">
                 <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-sans font-medium border ${
                     u.role === "admin"
-                      ? "bg-gray-900 text-white"
-                      : "bg-gray-100 text-gray-600"
+                      ? "bg-tint text-ink-900 border-tint"
+                      : "bg-ink-500 text-fg-2 border-ink-600"
                   }`}
                 >
                   {u.role}
                 </span>
               </td>
-              <td className="px-5 py-3 text-gray-500">
+              <td className="px-5 py-3">
                 {u.role === "admin" ? (
-                  <span className="text-gray-300 text-xs">All</span>
+                  <span className="text-fg-3 font-sans text-xs">All</span>
                 ) : u.client_names && u.client_names.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
                     {u.client_names.map((name, idx) => (
                       <span
                         key={idx}
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600"
+                        className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-sans bg-ink-500 text-fg-2 border border-ink-600"
                       >
                         {name}
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <span className="text-gray-300">—</span>
+                  <span className="text-fg-3 font-sans">—</span>
                 )}
               </td>
-              <td className="px-5 py-3 text-gray-400 text-xs">
+              <td className="px-5 py-3 text-fg-3 font-mono text-xs">
                 {u.last_login ? new Date(u.last_login).toLocaleDateString() : "Never"}
               </td>
               <td className="px-5 py-3">
                 <div className="flex items-center justify-end gap-2">
                   <button
                     onClick={() => onEdit(u)}
-                    className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                    className="text-xs text-fg-3 hover:text-fg-1 font-sans transition-colors duration-150"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => onToggle(u)}
-                    className={`text-xs transition-colors ${
+                    className={`text-xs font-sans transition-colors duration-150 ${
                       u.is_active
-                        ? "text-gray-300 hover:text-red-500"
-                        : "text-green-500 hover:text-green-700"
+                        ? "text-fg-3 hover:text-signal-bad"
+                        : "text-signal-good hover:opacity-80"
                     }`}
                   >
                     {u.is_active ? "Deactivate" : "Activate"}
@@ -502,13 +502,13 @@ function Modal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-ink-800 border border-ink-600 rounded-xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+          <h2 className="font-sans font-semibold text-fg-1 text-base">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 transition-colors"
+            className="text-fg-3 hover:text-fg-1 transition-colors duration-150"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -532,9 +532,9 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">
+      <label className="block text-xs font-sans font-medium text-fg-2 mb-1">
         {label}
-        {hint && <span className="ml-1 font-normal text-gray-400">({hint})</span>}
+        {hint && <span className="ml-1 font-normal text-fg-3">({hint})</span>}
       </label>
       {children}
     </div>

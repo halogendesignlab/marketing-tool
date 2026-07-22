@@ -49,20 +49,20 @@ export default function EditClientPage() {
   if (loading || !user || !isAdmin) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ink-900">
       <Nav />
       <main className="max-w-3xl mx-auto px-6 py-8">
-        {fetching && <p className="text-sm text-gray-400">Loading…</p>}
-        {!fetching && !client && <p className="text-sm text-red-500">Client not found.</p>}
+        {fetching && <p className="text-sm text-fg-3 font-sans">Loading…</p>}
+        {!fetching && !client && <p className="text-sm text-signal-bad font-sans">Client not found.</p>}
         {client && (
           <>
             <div className="flex items-center justify-between mb-6">
-              <h1 className="text-xl font-semibold text-gray-900">{client.brand_name}</h1>
+              <h1 className="font-sans font-semibold text-fg-1 text-xl">{client.brand_name}</h1>
               {client.drive_folder_id && (
                 <button
                   onClick={handleDriveSync}
                   disabled={syncing}
-                  className="px-4 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  className="btn-ghost disabled:opacity-50"
                 >
                   {syncing ? "Syncing…" : "Sync from Drive"}
                 </button>

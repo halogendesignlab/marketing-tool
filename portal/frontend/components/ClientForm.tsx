@@ -85,8 +85,8 @@ const DEFAULT_FORM = {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="bg-white rounded-xl border border-gray-200 p-6">
-      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">{title}</h2>
+    <section className="bg-ink-700 rounded-xl border border-ink-600 p-6">
+      <h2 className="font-sans text-xs font-semibold text-fg-3 uppercase tracking-widest mb-4">{title}</h2>
       <div className="space-y-4">{children}</div>
     </section>
   );
@@ -95,14 +95,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block font-sans text-sm font-medium text-fg-2 mb-1">{label}</label>
       {children}
-      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-fg-3 font-sans mt-1">{hint}</p>}
     </div>
   );
 }
-
-const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900";
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -281,14 +279,14 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
     <form onSubmit={handleSubmit} className="space-y-6">
 
       {/* Basic Info */}
-      <Section title="Basic Info">
+      <Section title="Basic info">
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Brand Name">
-            <input className={inputCls} value={form.brand_name} onChange={set("brand_name")} required />
+          <Field label="Brand name">
+            <input className="input" value={form.brand_name} onChange={set("brand_name")} required />
           </Field>
           <Field label="Client ID" hint="Lowercase slug, e.g. acme_plumbing. Cannot be changed after creation.">
             <input
-              className={inputCls}
+              className="input"
               value={form.client_id}
               onChange={set("client_id")}
               disabled={isEdit}
@@ -300,15 +298,15 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
         </div>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Industry">
-            <input className={inputCls} value={form.industry} onChange={set("industry")} required />
+            <input className="input" value={form.industry} onChange={set("industry")} required />
           </Field>
           <Field label="Tone" hint="Describe the brand voice, e.g. 'professional and friendly'">
-            <input className={inputCls} value={form.tone} onChange={set("tone")} required />
+            <input className="input" value={form.tone} onChange={set("tone")} required />
           </Field>
         </div>
         {isEdit && (
           <Field label="Status">
-            <select className={inputCls} value={form.is_active ? "active" : "inactive"} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === "active" }))}>
+            <select className="input" value={form.is_active ? "active" : "inactive"} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === "active" }))}>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
@@ -320,18 +318,18 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
       <Section title="Location">
         <div className="grid grid-cols-2 gap-4">
           <Field label="City">
-            <input className={inputCls} value={form.location_city} onChange={set("location_city")} required />
+            <input className="input" value={form.location_city} onChange={set("location_city")} required />
           </Field>
           <Field label="State">
-            <input className={inputCls} value={form.location_state} onChange={set("location_state")} required />
+            <input className="input" value={form.location_state} onChange={set("location_state")} required />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Latitude" hint="Used for geo-grid SERP tracking">
-            <input className={inputCls} type="number" step="any" value={form.location_lat} onChange={set("location_lat")} required />
+            <input className="input" type="number" step="any" value={form.location_lat} onChange={set("location_lat")} required />
           </Field>
           <Field label="Longitude">
-            <input className={inputCls} type="number" step="any" value={form.location_lng} onChange={set("location_lng")} required />
+            <input className="input" type="number" step="any" value={form.location_lng} onChange={set("location_lng")} required />
           </Field>
         </div>
       </Section>
@@ -339,20 +337,20 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
       {/* Publer */}
       <Section title="Publer">
         <Field label="Workspace ID">
-          <input className={inputCls} value={form.publer_workspace_id} onChange={set("publer_workspace_id")} />
+          <input className="input" value={form.publer_workspace_id} onChange={set("publer_workspace_id")} />
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Instagram Profile ID">
-            <input className={inputCls} value={form.publer_instagram_id} onChange={set("publer_instagram_id")} />
+          <Field label="Instagram profile ID">
+            <input className="input" value={form.publer_instagram_id} onChange={set("publer_instagram_id")} />
           </Field>
-          <Field label="Facebook Profile ID">
-            <input className={inputCls} value={form.publer_facebook_id} onChange={set("publer_facebook_id")} />
+          <Field label="Facebook profile ID">
+            <input className="input" value={form.publer_facebook_id} onChange={set("publer_facebook_id")} />
           </Field>
-          <Field label="LinkedIn Profile ID">
-            <input className={inputCls} value={form.publer_linkedin_id} onChange={set("publer_linkedin_id")} />
+          <Field label="LinkedIn profile ID">
+            <input className="input" value={form.publer_linkedin_id} onChange={set("publer_linkedin_id")} />
           </Field>
-          <Field label="GBP Profile ID">
-            <input className={inputCls} value={form.publer_gbp_id} onChange={set("publer_gbp_id")} />
+          <Field label="GBP profile ID">
+            <input className="input" value={form.publer_gbp_id} onChange={set("publer_gbp_id")} />
           </Field>
         </div>
       </Section>
@@ -361,38 +359,37 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
       <Section title="Google Business Profile">
         <div className="grid grid-cols-2 gap-4">
           <Field label="Location ID">
-            <input className={inputCls} value={form.gbp_location_id} onChange={set("gbp_location_id")} />
+            <input className="input" value={form.gbp_location_id} onChange={set("gbp_location_id")} />
           </Field>
           <Field label="Account ID">
-            <input className={inputCls} value={form.gbp_account_id} onChange={set("gbp_account_id")} />
+            <input className="input" value={form.gbp_account_id} onChange={set("gbp_account_id")} />
           </Field>
         </div>
-        <Field label="Credentials File Path" hint="Absolute path to the Google service account JSON file on the server">
-          <input className={inputCls} value={form.gbp_credentials_file} onChange={set("gbp_credentials_file")} />
+        <Field label="Credentials file path" hint="Absolute path to the Google service account JSON file on the server">
+          <input className="input" value={form.gbp_credentials_file} onChange={set("gbp_credentials_file")} />
         </Field>
       </Section>
 
       {/* Keywords */}
       <Section title="Keywords">
-        {/* Keyword research file — edit mode only */}
         {isEdit && (
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-1">Keyword research file</p>
-            <p className="text-xs text-gray-400 mb-3">
-              Upload a CSV with a <code className="bg-gray-100 px-1 rounded">keyword</code> column. Used as a source for blog and content topics.
+            <p className="text-sm font-sans font-medium text-fg-2 mb-1">Keyword research file</p>
+            <p className="text-xs text-fg-3 font-sans mb-3">
+              Upload a CSV with a <code className="bg-ink-500 text-fg-2 px-1 rounded font-mono">keyword</code> column. Used as a source for blog and content topics.
             </p>
 
             {kwInfo?.exists ? (
-              <div className="flex items-start justify-between bg-gray-50 rounded-lg p-3 mb-3">
+              <div className="flex items-start justify-between bg-ink-500 border border-ink-600 rounded-md p-3 mb-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-800">
+                  <p className="text-sm font-sans font-medium text-fg-1">
                     {kwInfo.row_count} keywords
-                    <span className="text-xs text-gray-400 font-normal ml-2">
+                    <span className="text-xs text-fg-3 font-normal ml-2">
                       Updated {kwInfo.updated_at ? new Date(kwInfo.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
                     </span>
                   </p>
                   {kwInfo.preview && kwInfo.preview.length > 0 && (
-                    <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                    <p className="text-xs text-fg-3 font-mono mt-1 leading-relaxed">
                       {kwInfo.preview.join(", ")}{(kwInfo.row_count ?? 0) > kwInfo.preview.length ? `, +${(kwInfo.row_count ?? 0) - kwInfo.preview.length} more` : ""}
                     </p>
                   )}
@@ -401,7 +398,7 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
                   type="button"
                   onClick={() => kwInputRef.current?.click()}
                   disabled={kwUploading}
-                  className="ml-4 text-xs text-gray-500 hover:text-gray-800 underline underline-offset-2 whitespace-nowrap disabled:opacity-50"
+                  className="ml-4 text-xs text-fg-3 hover:text-fg-1 font-sans underline underline-offset-2 whitespace-nowrap disabled:opacity-50 transition-colors duration-150"
                 >
                   {kwUploading ? "Uploading…" : "Replace file"}
                 </button>
@@ -411,7 +408,7 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
                 type="button"
                 onClick={() => kwInputRef.current?.click()}
                 disabled={kwUploading}
-                className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 border border-dashed border-ink-600 rounded-md font-sans text-sm text-fg-3 hover:border-tint hover:text-fg-2 transition-colors duration-150 disabled:opacity-50"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
@@ -447,13 +444,13 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
       </Section>
 
       {/* Local Falcon */}
-      <Section title="Local Falcon (SERP Grids)">
+      <Section title="Local Falcon (SERP grids)">
         <Field
-          label="API Key"
+          label="API key"
           hint="Found in your Local Falcon account under Settings → API."
         >
           <input
-            className={inputCls}
+            className="input"
             value={form.local_falcon_api_key}
             onChange={set("local_falcon_api_key")}
             placeholder="lf_xxxxxxxxxxxx"
@@ -464,7 +461,7 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
           hint="The Place ID of this business in Local Falcon (e.g. ChIJxxxxxxx). Find it in Local Falcon → your location → Settings."
         >
           <input
-            className={inputCls}
+            className="input"
             value={form.local_falcon_place_id}
             onChange={set("local_falcon_place_id")}
             placeholder="ChIJ…"
@@ -475,43 +472,43 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
       {/* Schedule */}
       <Section title="Schedule">
         <div className="grid grid-cols-3 gap-4">
-          <Field label="Social Posts / Month">
-            <input className={inputCls} type="number" min="0" value={form.social_posts_per_month} onChange={set("social_posts_per_month")} />
+          <Field label="Social posts / month">
+            <input className="input" type="number" min="0" value={form.social_posts_per_month} onChange={set("social_posts_per_month")} />
           </Field>
-          <Field label="Blog Posts / Month">
-            <input className={inputCls} type="number" min="0" value={form.blog_posts_per_month} onChange={set("blog_posts_per_month")} />
+          <Field label="Blog posts / month">
+            <input className="input" type="number" min="0" value={form.blog_posts_per_month} onChange={set("blog_posts_per_month")} />
           </Field>
-          <Field label="GBP Posts / Month">
-            <input className={inputCls} type="number" min="0" value={form.gbp_posts_per_month} onChange={set("gbp_posts_per_month")} />
+          <Field label="GBP posts / month">
+            <input className="input" type="number" min="0" value={form.gbp_posts_per_month} onChange={set("gbp_posts_per_month")} />
           </Field>
-          <Field label="GBP Image Uploads / Week">
-            <input className={inputCls} type="number" min="0" value={form.gbp_image_uploads_per_week} onChange={set("gbp_image_uploads_per_week")} />
+          <Field label="GBP image uploads / week">
+            <input className="input" type="number" min="0" value={form.gbp_image_uploads_per_week} onChange={set("gbp_image_uploads_per_week")} />
           </Field>
-          <Field label="Report Day of Month">
-            <input className={inputCls} type="number" min="1" max="28" value={form.report_day_of_month} onChange={set("report_day_of_month")} />
+          <Field label="Report day of month">
+            <input className="input" type="number" min="1" max="28" value={form.report_day_of_month} onChange={set("report_day_of_month")} />
           </Field>
-          <Field label="SERP Check Day of Month">
-            <input className={inputCls} type="number" min="1" max="28" value={form.serp_check_day_of_month} onChange={set("serp_check_day_of_month")} />
+          <Field label="SERP check day of month">
+            <input className="input" type="number" min="1" max="28" value={form.serp_check_day_of_month} onChange={set("serp_check_day_of_month")} />
           </Field>
-          <Field label="Review Check Interval (hrs)">
-            <input className={inputCls} type="number" min="1" value={form.review_check_interval_hours} onChange={set("review_check_interval_hours")} />
+          <Field label="Review check interval (hrs)">
+            <input className="input" type="number" min="1" value={form.review_check_interval_hours} onChange={set("review_check_interval_hours")} />
           </Field>
-          <Field label="Directory Check Day of Month">
-            <input className={inputCls} type="number" min="1" max="28" value={form.directory_check_day_of_month} onChange={set("directory_check_day_of_month")} />
+          <Field label="Directory check day of month">
+            <input className="input" type="number" min="1" max="28" value={form.directory_check_day_of_month} onChange={set("directory_check_day_of_month")} />
           </Field>
         </div>
       </Section>
 
       {/* Directories */}
-      <Section title="Directories to Monitor">
+      <Section title="Directories to monitor">
         <div className="flex flex-wrap gap-3">
           {ALL_DIRECTORIES.map((dir) => (
-            <label key={dir} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <label key={dir} className="flex items-center gap-2 text-sm font-sans text-fg-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={form.directories_to_monitor.includes(dir)}
                 onChange={() => toggleDir(dir)}
-                className="rounded border-gray-300"
+                className="rounded border-ink-600 bg-ink-700 text-tint focus:ring-tint focus:ring-offset-ink-700"
               />
               <span className="capitalize">{dir}</span>
             </label>
@@ -520,13 +517,13 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
       </Section>
 
       {/* Google Drive */}
-      <Section title="Google Drive (Media Sync)">
+      <Section title="Google Drive (media sync)">
         <Field
-          label="Drive Folder ID"
+          label="Drive folder ID"
           hint="ID from the folder URL: drive.google.com/drive/folders/THIS_ID. Leave blank to skip Drive sync."
         >
           <input
-            className={inputCls}
+            className="input"
             value={form.drive_folder_id}
             onChange={set("drive_folder_id")}
             placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
@@ -537,7 +534,7 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
           hint="When set, this client's media library shows photos from the selected account instead of its own."
         >
           <select
-            className={inputCls}
+            className="input"
             value={form.media_source_client_id}
             onChange={set("media_source_client_id")}
           >
@@ -556,30 +553,30 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
       {/* Notifications */}
       <Section title="Notifications">
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Client Email" hint="Receives content-ready and report notifications">
-            <input className={inputCls} type="email" value={form.client_email} onChange={set("client_email")} />
+          <Field label="Client email" hint="Receives content-ready and report notifications">
+            <input className="input" type="email" value={form.client_email} onChange={set("client_email")} />
           </Field>
-          <Field label="Admin Email" hint="Receives publish failures and internal alerts">
-            <input className={inputCls} type="email" value={form.admin_email} onChange={set("admin_email")} />
+          <Field label="Admin email" hint="Receives publish failures and internal alerts">
+            <input className="input" type="email" value={form.admin_email} onChange={set("admin_email")} />
           </Field>
         </div>
       </Section>
 
       {/* Portal Users — only on edit */}
       {isEdit && (
-        <Section title="Portal Users">
+        <Section title="Portal users">
           {users.length > 0 && (
-            <div className="divide-y divide-gray-100 mb-4">
+            <div className="divide-y divide-ink-600 mb-4">
               {users.map((u) => (
                 <div key={u.id} className="flex items-center justify-between py-2">
                   <div>
-                    <p className="text-sm text-gray-900">{u.name}</p>
-                    <p className="text-xs text-gray-400">{u.email} · {u.role}</p>
+                    <p className="text-sm font-sans text-fg-1">{u.name}</p>
+                    <p className="text-xs text-fg-3 font-sans">{u.email} · {u.role}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleRemoveUser(u.id)}
-                    className="text-xs text-red-500 hover:text-red-700"
+                    className="text-xs text-signal-bad hover:opacity-80 font-sans transition-opacity duration-150"
                   >
                     Remove
                   </button>
@@ -588,13 +585,13 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
             </div>
           )}
 
-          <div className="border-t border-gray-100 pt-4">
-            <p className="text-xs font-medium text-gray-500 mb-3">Add user</p>
+          <div className="border-t border-ink-600 pt-4">
+            <p className="text-xs font-sans font-medium text-fg-3 mb-3">Add user</p>
             <div className="grid grid-cols-2 gap-3 mb-3">
-              <input className={inputCls} placeholder="Name" value={inviteName} onChange={(e) => setInviteName(e.target.value)} />
-              <input className={inputCls} placeholder="Email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
-              <input className={inputCls} placeholder="Temporary password" type="password" value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} />
-              <select className={inputCls} value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
+              <input className="input" placeholder="Name" value={inviteName} onChange={(e) => setInviteName(e.target.value)} />
+              <input className="input" placeholder="Email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
+              <input className="input" placeholder="Temporary password" type="password" value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} />
+              <select className="input" value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
                 <option value="client">Client</option>
                 <option value="admin">Admin</option>
               </select>
@@ -603,7 +600,7 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
               type="button"
               onClick={handleInvite}
               disabled={inviting}
-              className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 disabled:opacity-50"
+              className="btn-primary disabled:opacity-50"
             >
               {inviting ? "Adding…" : "Add user"}
             </button>
@@ -616,14 +613,14 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
         <button
           type="button"
           onClick={() => router.push("/admin/clients")}
-          className="text-sm text-gray-500 hover:text-gray-700"
+          className="text-sm text-fg-3 hover:text-fg-1 font-sans transition-colors duration-150"
         >
           ← Back to clients
         </button>
         <button
           type="submit"
           disabled={saving}
-          className="px-6 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 disabled:opacity-50"
+          className="btn-primary disabled:opacity-50"
         >
           {saving ? "Saving…" : isEdit ? "Save changes" : "Create client"}
         </button>

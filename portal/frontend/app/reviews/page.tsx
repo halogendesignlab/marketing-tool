@@ -94,24 +94,24 @@ export default function ReviewsPage() {
   if (loading || !user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ink-900">
       <Nav />
       <main className="max-w-4xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-semibold text-gray-900">Reviews</h1>
+          <h1 className="font-sans font-semibold text-fg-1 text-xl">Reviews</h1>
           <button
             onClick={() => setShowResponded(!showResponded)}
-            className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+            className="text-sm text-fg-3 hover:text-fg-1 font-sans transition-colors duration-150"
           >
             {showResponded ? "Show unanswered" : "Show responded"}
           </button>
         </div>
 
-        {fetching && <p className="text-gray-400 text-sm">Loading...</p>}
+        {fetching && <p className="text-fg-3 font-sans text-sm">Loading…</p>}
 
         {!fetching && reviews.length === 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
-            <p className="text-gray-400 text-sm">No reviews found.</p>
+          <div className="bg-ink-700 rounded-xl border border-ink-600 p-10 text-center">
+            <p className="text-fg-3 font-sans text-sm">No reviews found.</p>
           </div>
         )}
 
@@ -119,70 +119,70 @@ export default function ReviewsPage() {
           {reviews.map((review) => {
             const draft = responses[review.id];
             return (
-              <div key={review.id} className="bg-white rounded-xl border border-gray-200 p-6">
+              <div key={review.id} className="bg-ink-700 rounded-xl border border-ink-600 p-6">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full capitalize">
+                    <span className="text-xs font-sans font-medium bg-ink-500 text-fg-2 px-2 py-0.5 rounded-md border border-ink-600 capitalize">
                       {review.platform}
                     </span>
                     {review.rating && (
-                      <span className="text-xs text-yellow-500">
+                      <span className="text-xs text-signal-warn">
                         {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
                       </span>
                     )}
                     {review.sentiment && <SentimentBadge sentiment={review.sentiment} />}
                   </div>
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-fg-3 font-sans">
                     {formatDistanceToNow(new Date(review.detected_at), { addSuffix: true })}
                   </span>
                 </div>
 
                 {review.reviewer_name && (
-                  <p className="text-sm font-medium text-gray-700 mb-1">{review.reviewer_name}</p>
+                  <p className="text-sm font-sans font-medium text-fg-1 mb-1">{review.reviewer_name}</p>
                 )}
                 {review.body && (
-                  <p className="text-sm text-gray-600 leading-relaxed mb-4">{review.body}</p>
+                  <p className="text-sm text-fg-2 font-mono leading-relaxed mb-4">{review.body}</p>
                 )}
 
                 {draft && !review.responded_at && (
-                  <div className="border-t border-gray-100 pt-4 mt-2">
-                    <p className="text-xs font-medium text-gray-500 mb-2">Drafted response</p>
+                  <div className="border-t border-ink-600 pt-4 mt-2">
+                    <p className="text-xs font-sans font-medium text-fg-3 mb-2">Drafted response</p>
                     {editingId === review.id ? (
                       <textarea
                         value={editBody}
                         onChange={(e) => setEditBody(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg p-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900 min-h-[80px]"
+                        className="input min-h-[80px] resize-none"
                       />
                     ) : (
-                      <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 leading-relaxed">
+                      <p className="text-sm text-fg-2 font-mono bg-ink-500 border border-ink-600 rounded-md p-3 leading-relaxed">
                         {draft.body}
                       </p>
                     )}
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => handleApproveResponse(review.id)}
-                        className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors"
+                        className="btn-primary"
                       >
                         Approve &amp; post
                       </button>
                       {editingId === review.id ? (
                         <button
                           onClick={() => setEditingId(null)}
-                          className="px-4 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+                          className="btn-ghost"
                         >
                           Cancel
                         </button>
                       ) : (
                         <button
                           onClick={() => { setEditingId(review.id); setEditBody(draft.body); }}
-                          className="px-4 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+                          className="btn-ghost"
                         >
                           Edit
                         </button>
                       )}
                       <button
                         onClick={() => handleRejectResponse(review.id)}
-                        className="px-4 py-1.5 text-red-500 text-sm hover:text-red-700 transition-colors"
+                        className="text-sm text-signal-bad hover:opacity-80 font-sans transition-opacity duration-150"
                       >
                         Reject
                       </button>
@@ -191,7 +191,7 @@ export default function ReviewsPage() {
                 )}
 
                 {review.responded_at && (
-                  <p className="text-xs text-green-600 mt-2">
+                  <p className="text-xs text-signal-good font-sans mt-2">
                     Responded {formatDistanceToNow(new Date(review.responded_at), { addSuffix: true })}
                   </p>
                 )}
@@ -206,12 +206,12 @@ export default function ReviewsPage() {
 
 function SentimentBadge({ sentiment }: { sentiment: string }) {
   const colors: Record<string, string> = {
-    positive: "bg-green-100 text-green-700",
-    neutral: "bg-gray-100 text-gray-600",
-    negative: "bg-red-100 text-red-700",
+    positive: "bg-signal-good/10 text-signal-good border-signal-good/30",
+    neutral: "bg-ink-500 text-fg-3 border-ink-600",
+    negative: "bg-signal-bad/10 text-signal-bad border-signal-bad/30",
   };
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${colors[sentiment] || "bg-gray-100 text-gray-600"}`}>
+    <span className={`text-xs font-sans px-2 py-0.5 rounded-md capitalize border ${colors[sentiment] || "bg-ink-500 text-fg-3 border-ink-600"}`}>
       {sentiment}
     </span>
   );

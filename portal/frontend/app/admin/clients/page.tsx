@@ -38,27 +38,27 @@ export default function AdminClientsPage() {
   if (loading || !user || !isAdmin) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ink-900">
       <Nav />
       <main className="max-w-5xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-semibold text-gray-900">Clients</h1>
+          <h1 className="font-sans font-semibold text-fg-1 text-xl">Clients</h1>
           <Link
             href="/admin/clients/new"
-            className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800 transition-colors"
+            className="btn-primary"
           >
             Add client
           </Link>
         </div>
 
-        {fetching && <p className="text-sm text-gray-400">Loading…</p>}
+        {fetching && <p className="text-sm text-fg-3 font-sans">Loading…</p>}
 
         {!fetching && clients.length === 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
-            <p className="text-gray-400 text-sm mb-4">No clients yet.</p>
+          <div className="bg-ink-700 rounded-xl border border-ink-600 p-10 text-center">
+            <p className="text-fg-3 font-sans text-sm mb-4">No clients yet.</p>
             <Link
               href="/admin/clients/new"
-              className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-800"
+              className="btn-primary"
             >
               Add first client
             </Link>
@@ -66,23 +66,23 @@ export default function AdminClientsPage() {
         )}
 
         {clients.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+          <div className="bg-ink-700 rounded-xl border border-ink-600 divide-y divide-ink-600">
             {clients.map((c) => (
               <div key={c.id} className="flex items-center justify-between px-5 py-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900">{c.brand_name}</span>
+                    <span className="font-sans font-medium text-fg-1 text-sm">{c.brand_name}</span>
                     {!c.is_active && (
-                      <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Inactive</span>
+                      <span className="text-xs bg-ink-500 text-fg-3 font-sans px-2 py-0.5 rounded-md border border-ink-600">Inactive</span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-fg-3 font-sans mt-0.5">
                     {c.industry} · {c.location_city}, {c.location_state}
                   </p>
                 </div>
                 <Link
                   href={`/admin/clients/${c.id}`}
-                  className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+                  className="text-sm text-fg-3 hover:text-fg-1 font-sans transition-colors duration-150"
                 >
                   Edit →
                 </Link>

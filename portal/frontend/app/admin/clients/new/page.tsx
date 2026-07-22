@@ -17,10 +17,10 @@ export default function NewClientPage() {
   if (loading || !user || !isAdmin) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ink-900">
       <Nav />
       <main className="max-w-3xl mx-auto px-6 py-8">
-        <h1 className="text-xl font-semibold text-gray-900 mb-6">New Client</h1>
+        <h1 className="font-sans font-semibold text-fg-1 text-xl mb-6">New client</h1>
         <ClientForm />
       </main>
     </div>

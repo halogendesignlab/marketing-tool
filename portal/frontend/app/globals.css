@@ -1,23 +1,17 @@
+@import url("https://fonts.googleapis.com/css2?family=New+Science:wght@500;600&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-  color-scheme: light;
+  color-scheme: dark;
 }
 
-
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  background: #07080B;
+  color: #F4F5F7;
+  font-family: "JetBrains Mono", monospace;
 }
 
 @layer utilities {
@@ -28,6 +22,18 @@ body {
 
 @layer components {
   .input {
-    @apply w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-transparent transition-colors;
+    @apply w-full bg-ink-700 border border-ink-600 rounded-md px-3 py-2 text-sm text-fg-1 placeholder-fg-3 focus:outline-none focus:border-tint transition-colors duration-150;
+  }
+
+  .btn-primary {
+    @apply bg-tint text-ink-900 font-sans font-semibold text-sm px-4 py-2 rounded-md hover:bg-tint-hot transition-colors duration-150;
+  }
+
+  .btn-ghost {
+    @apply border border-ink-600 text-fg-2 font-sans text-sm px-4 py-2 rounded-md hover:border-tint hover:text-fg-1 transition-colors duration-150;
+  }
+
+  .card {
+    @apply bg-ink-700 border border-ink-600 rounded-xl p-5;
   }
 }
