@@ -6,7 +6,7 @@ set -e
 
 APP_DIR="/opt/marketing-tool"
 APP_USER="marketing"
-DOMAIN="${DOMAIN:-www.halogenboise.com}"
+DOMAIN="${DOMAIN:-portal.halogenboise.com}"
 
 echo "==> Installing system dependencies"
 apt-get update -q
