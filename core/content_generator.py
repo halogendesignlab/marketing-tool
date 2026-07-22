@@ -9,6 +9,7 @@ _client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 MODEL = "claude-sonnet-4-5"
 MAX_TOKENS = 1024
+MAX_TOKENS_BLOG = 2048
 
 
 def _call(system: str, user: str) -> str:
@@ -90,27 +91,122 @@ def generate_social_captions_batch(
 # ── Blog posts ────────────────────────────────────────────────────────────────
 
 def generate_blog_draft(config: ClientConfig, topic: str | None = None) -> dict:
-    """Generate a blog post draft. Returns {title, body}."""
+    """Generate a blog post draft with semantic HTML body. Returns {title, body}."""
+    from .keyword_loader import get_blog_keywords, get_all_keywords_summary
+
     topic_line = f"Topic: {topic}" if topic else "Choose a relevant, SEO-friendly topic for this brand."
 
+    # Pull keyword context from research CSV if available
+    blog_kws = get_blog_keywords(config.client_id, max_keywords=8)
+    keyword_context = ""
+    if blog_kws:
+        kw_lines = "\n".join(
+            f"- {k['keyword']} (vol:{k['volume']}, priority:{k['priority']})"
+            for k in blog_kws
+        )
+        keyword_context = (
+            f"\n\nKeyword research to inform this post — weave relevant terms in naturally:\n{kw_lines}"
+        )
+    else:
+        # Fall back to full summary if no blog-specific keywords
+        summary = get_all_keywords_summary(config.client_id)
+        if summary:
+            keyword_context = f"\n\n{summary}"
+
     system = (
-        f"You are a content writer for {config.brand_name}, a {config.industry} company "
+        f"You are an SEO content writer for {config.brand_name}, a {config.industry} company "
         f"in {config.location.city}, {config.location.state}. "
         f"Write in this tone: {config.tone}. "
-        "Write a complete blog post with a title and body. "
-        "Format: first line is the title (no 'Title:' label), then a blank line, then the body. "
-        "Body should be 400-600 words, use short paragraphs, no markdown headers."
+        "You write blog posts as semantic HTML for publishing to a CMS. "
+        "Rules:\n"
+        "- Output ONLY the title on the first line (plain text, no HTML tag), then a blank line, then the HTML body.\n"
+        "- The HTML body must use proper semantic elements: <h2> for main section headings, "
+        "<h3> for sub-headings, <p> for paragraphs, <ul>/<ol>/<li> for lists.\n"
+        "- Do NOT include <html>, <head>, <body>, <h1>, or any outer wrapper tags.\n"
+        "- Do NOT use markdown — output real HTML only.\n"
+        "- Target 600-900 words of readable content.\n"
+        "- Structure: opening <p> that hooks the reader, then 3-4 <h2> sections each with "
+        "supporting <p> and optional <ul> content, then a closing <p> with a subtle call to action.\n"
+        "- Weave in the city/state and relevant keywords naturally — do not stuff them, use them where they fit.\n"
+        "- Each <h2> should target a specific subtopic a homeowner or buyer might search for."
     )
     user = (
-        f"{_brand_context(config)}\n\n"
+        f"{_brand_context(config)}"
+        f"{keyword_context}\n\n"
         f"{topic_line}\n\n"
-        "Write the blog post now."
+        "Write the blog post now. Remember: first line = plain text title, blank line, then semantic HTML body."
     )
-    raw = _call(system, user)
-    lines = raw.strip().split("\n", 1)
-    title = lines[0].strip()
+
+    message = _client.messages.create(
+        model=MODEL,
+        max_tokens=MAX_TOKENS_BLOG,
+        messages=[{"role": "user", "content": user}],
+        system=system,
+    )
+    raw = message.content[0].text.strip()
+    lines = raw.split("\n", 1)
+    title = lines[0].strip().lstrip("#").strip()   # strip any accidental # the model adds
     body = lines[1].strip() if len(lines) > 1 else ""
+    # Remove any accidental markdown code fences
+    if body.startswith("```"):
+        body = body.split("\n", 1)[1].rsplit("```", 1)[0].strip()
     return {"title": title, "body": body}
+
+
+# ── Blog image selection ──────────────────────────────────────────────────────
+
+def select_blog_images(
+    title: str,
+    body_excerpt: str,
+    project_reps: dict,  # {project_name: MediaItem-like object with .id, .url, .last_used_at}
+    count: int = 3,
+) -> list:
+    """Ask Claude which projects from the media library best illustrate this blog post.
+
+    Returns a list of representative media item objects (one per selected project),
+    ordered by relevance. Falls back to LRU order if Claude can't parse a response.
+    """
+    import json, re
+
+    if not project_reps:
+        return []
+
+    # Cap at 60 projects to keep the prompt tight
+    project_names = list(project_reps.keys())[:60]
+
+    system = (
+        "You are choosing photographs to illustrate a blog post. "
+        "From the list of available photo projects, pick the ones whose subject matter "
+        "would be most visually relevant and complementary to the article. "
+        f"Select exactly {min(count, len(project_names))} project names. "
+        'Respond with ONLY a JSON array of project name strings, e.g. ["Project A", "Project B"]. '
+        "No explanation, no markdown, just the JSON array."
+    )
+    user = (
+        f"Blog title: {title}\n\n"
+        f"Article opening:\n{body_excerpt}\n\n"
+        "Available photo projects:\n" + "\n".join(f"- {n}" for n in project_names)
+    )
+
+    try:
+        message = _client.messages.create(
+            model=MODEL,
+            max_tokens=200,
+            messages=[{"role": "user", "content": user}],
+            system=system,
+        )
+        raw = message.content[0].text.strip()
+        match = re.search(r'\[.*?\]', raw, re.DOTALL)
+        if match:
+            selected_names = json.loads(match.group())
+            results = [project_reps[n] for n in selected_names if n in project_reps]
+            if results:
+                return results
+    except Exception:
+        pass
+
+    # Fallback: LRU order
+    return list(project_reps.values())[:count]
 
 
 # ── GBP posts ─────────────────────────────────────────────────────────────────
@@ -179,6 +275,153 @@ def generate_review_response(
         f"{guidance}"
     )
     return _call(system, user)
+
+
+# ── Image-based captions (Claude vision) ─────────────────────────────────────
+
+PLATFORM_GUIDANCE_VISION = {
+    "instagram": (
+        "Instagram caption: visually descriptive, engaging, 1-3 short paragraphs, "
+        "3-5 relevant hashtags at the end. Max 2200 chars."
+    ),
+    "facebook": (
+        "Facebook caption: conversational, slightly longer than Instagram, no hashtags, "
+        "encourage comments or engagement. Max 500 chars."
+    ),
+    "linkedin": (
+        "LinkedIn caption: professional, value-driven, business-focused. "
+        "No hashtags. Suitable for a commercial real estate audience. Max 400 chars."
+    ),
+    "gbp": (
+        "Google Business Profile post: 150-300 words. No hashtags. "
+        "Highlight what's shown, include a subtle call to action."
+    ),
+}
+
+
+def generate_captions_from_image(
+    config: ClientConfig,
+    image_path: str,
+    image_filename: str | None = None,
+    image_meta: dict | None = None,
+) -> dict[str, str]:
+    """Analyze an image with Claude vision and return platform-specific captions.
+
+    image_path: local filesystem path or /uploads/... relative URL
+    Returns: {"instagram": "...", "facebook": "...", "linkedin": "...", "gbp": "..."}
+    """
+    import base64
+    from pathlib import Path
+
+    UPLOADS_DIR = Path(__file__).parent.parent / "uploads"
+
+    if image_path.startswith("drive://"):
+        # Fetch from Google Drive on demand via service account
+        from core.drive_watcher import get_file_bytes
+        file_id = image_path.removeprefix("drive://")
+        image_bytes, media_type = get_file_bytes(file_id)
+    elif image_path.startswith("https://") or image_path.startswith("http://"):
+        # Fetch from R2 or any public URL
+        import httpx
+        resp = httpx.get(image_path, timeout=30)
+        resp.raise_for_status()
+        image_bytes = resp.content
+        media_type = resp.headers.get("content-type", "image/jpeg").split(";")[0]
+    elif image_path.startswith("/uploads/"):
+        local = UPLOADS_DIR / image_path.removeprefix("/uploads/")
+        image_bytes = local.read_bytes()
+        suffix = local.suffix.lower().lstrip(".")
+        media_type_map = {
+            "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "png": "image/png", "webp": "image/webp", "gif": "image/gif",
+        }
+        media_type = media_type_map.get(suffix, "image/jpeg")
+    else:
+        local = Path(image_path)
+        image_bytes = local.read_bytes()
+        suffix = local.suffix.lower().lstrip(".")
+        media_type_map = {
+            "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "png": "image/png", "webp": "image/webp", "gif": "image/gif",
+        }
+        media_type = media_type_map.get(suffix, "image/jpeg")
+    b64 = base64.standard_b64encode(image_bytes).decode()
+
+    filename_hint = ""
+    if image_filename:
+        filename_hint = (
+            f"\n\nFilename context: \"{image_filename}\" — "
+            "the filename may contain an address or location that you can reference in the captions."
+        )
+    if image_meta:
+        parts = []
+        if image_meta.get("category"):
+            parts.append(f"Category: {image_meta['category']}")
+        if image_meta.get("project"):
+            parts.append(f"Project/Subdivision: {image_meta['project']}")
+        if image_meta.get("photo_type"):
+            parts.append(f"Photo type: {image_meta['photo_type']}")
+        if parts:
+            filename_hint += "\n\nPhoto metadata: " + " | ".join(parts) + \
+                ". Reference the project or subdivision name naturally in the captions where appropriate."
+
+    platform_instructions = "\n".join(
+        f"{p.upper()}:\n{guidance}"
+        for p, guidance in PLATFORM_GUIDANCE_VISION.items()
+    )
+
+    system = (
+        f"You are a marketing copywriter for {config.brand_name}, "
+        f"a {config.industry} company in {config.location.city}, {config.location.state}. "
+        f"Tone: {config.tone}. "
+        "You will write platform-specific social media captions for the provided photo. "
+        "Write only the caption copy — no labels, no commentary, no quotation marks."
+    )
+
+    user_text = (
+        f"{_brand_context(config)}{filename_hint}\n\n"
+        f"Write one caption for each platform based on this photo.\n\n"
+        f"{platform_instructions}\n\n"
+        "Format your response EXACTLY like this (use the label on its own line):\n"
+        "INSTAGRAM:\n[caption]\n\nFACEBOOK:\n[caption]\n\nLINKEDIN:\n[caption]\n\nGBP:\n[caption]"
+    )
+
+    message = _client.messages.create(
+        model=MODEL,
+        max_tokens=2048,
+        messages=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": b64,
+                    },
+                },
+                {"type": "text", "text": user_text},
+            ],
+        }],
+        system=system,
+    )
+
+    raw = message.content[0].text.strip()
+    return _parse_platform_captions(raw)
+
+
+def _parse_platform_captions(text: str) -> dict[str, str]:
+    """Parse the labeled platform caption response."""
+    import re
+    result: dict[str, str] = {}
+    pattern = re.compile(r"(?:^|\n)(INSTAGRAM|FACEBOOK|LINKEDIN|GBP):\n(.*?)(?=\n(?:INSTAGRAM|FACEBOOK|LINKEDIN|GBP):|$)", re.DOTALL)
+    for m in pattern.finditer(text):
+        key = m.group(1).lower()
+        result[key] = m.group(2).strip()
+    # Fill any missing platforms with empty string
+    for p in ("instagram", "facebook", "linkedin", "gbp"):
+        result.setdefault(p, "")
+    return result
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────

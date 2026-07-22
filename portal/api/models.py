@@ -3,11 +3,21 @@
 import enum
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Boolean, DateTime, Enum, ForeignKey, Integer,
-    String, Text, Float, JSON
+    Boolean, Column, DateTime, Enum, ForeignKey, Integer,
+    String, Table, Text, Float, JSON
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
+
+
+# ── Association tables ────────────────────────────────────────────────────────
+
+user_clients = Table(
+    "user_clients",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("client_id", Integer, ForeignKey("clients.id"), primary_key=True),
+)
 
 
 def utcnow() -> datetime:
@@ -30,6 +40,7 @@ class ContentType(str, enum.Enum):
 
 class ContentStatus(str, enum.Enum):
     pending_approval = "pending_approval"
+    client_review = "client_review"       # sent to client for approval
     approved = "approved"
     rejected = "rejected"
     scheduled = "scheduled"
@@ -74,11 +85,14 @@ class Client(Base):
     location_lat: Mapped[float] = mapped_column(Float)
     location_lng: Mapped[float] = mapped_column(Float)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # When set, this client shares the media library of another client
+    media_source_client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     # Relationships
-    users: Mapped[list["User"]] = relationship("User", back_populates="client")
+    users: Mapped[list["User"]] = relationship("User", back_populates="client", foreign_keys="User.client_id")
+    portal_users: Mapped[list["User"]] = relationship("User", secondary="user_clients", back_populates="clients")
     content_items: Mapped[list["ContentItem"]] = relationship("ContentItem", back_populates="client")
     reviews: Mapped[list["Review"]] = relationship("Review", back_populates="client")
     assets: Mapped[list["Asset"]] = relationship("Asset", back_populates="client")
@@ -99,7 +113,12 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    client: Mapped["Client | None"] = relationship("Client", back_populates="users")
+    client: Mapped["Client | None"] = relationship("Client", back_populates="users", foreign_keys=[client_id])
+    clients: Mapped[list["Client"]] = relationship("Client", secondary="user_clients", back_populates="portal_users")
+
+    @property
+    def client_ids(self) -> list[int]:
+        return [c.id for c in self.clients]
 
 
 class ContentItem(Base):
@@ -161,6 +180,39 @@ class Review(Base):
 
     client: Mapped["Client"] = relationship("Client", back_populates="reviews")
     response_content: Mapped["ContentItem | None"] = relationship("ContentItem")
+
+
+class MediaFolder(Base):
+    __tablename__ = "media_folders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("media_folders.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    client: Mapped["Client"] = relationship("Client")
+    parent: Mapped["MediaFolder | None"] = relationship("MediaFolder", remote_side="MediaFolder.id", back_populates="children")
+    children: Mapped[list["MediaFolder"]] = relationship("MediaFolder", back_populates="parent")
+    media_items: Mapped[list["MediaItem"]] = relationship("MediaItem", back_populates="folder")
+
+
+class MediaItem(Base):
+    __tablename__ = "media_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False, index=True)
+    folder_id: Mapped[int | None] = mapped_column(ForeignKey("media_folders.id"), nullable=True)
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False, default="image/jpeg")
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # folder-derived metadata
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    client: Mapped["Client"] = relationship("Client")
+    folder: Mapped["MediaFolder | None"] = relationship("MediaFolder", back_populates="media_items")
 
 
 class Asset(Base):

@@ -6,13 +6,22 @@
   "location": {
     "city": "Boise",
     "state": "ID",
-    "lat": 43.6150,
+    "lat": 43.615,
     "lng": -116.2023
   },
   "social": {
-    "instagram": { "account_id": "", "access_token": "" },
-    "facebook": { "page_id": "", "access_token": "" },
-    "linkedin": { "company_id": "", "access_token": "" }
+    "instagram": {
+      "account_id": "",
+      "access_token": ""
+    },
+    "facebook": {
+      "page_id": "",
+      "access_token": ""
+    },
+    "linkedin": {
+      "company_id": "",
+      "access_token": ""
+    }
   },
   "publer": {
     "workspace_id": "69f66ded31d99b0c59366ee5",
@@ -28,29 +37,32 @@
     "account_id": "",
     "google_credentials_file": "clients/moorhouse_commercial/google_creds.json"
   },
-  "webflow": {
-    "site_id": "",
-    "blog_collection_id": "",
-    "api_token": ""
+  "local_falcon": {
+    "api_key": "d487298f262f8f4db44501288f06e97c",
+    "place_id": "ChIJZwLElktTrlQRM0wUUue-Fjg"
   },
-  "drive": {
-    "asset_folder_id": ""
-  },
-  "dataforseo": {
-    "serp_keywords": ["commercial real estate boise", "office space boise", "commercial property boise"],
-    "grid_radius_km": 15,
-    "grid_points": 25
-  },
-  "directories_to_monitor": ["google", "yelp", "bbb", "yellowpages", "bing"],
   "schedule": {
     "social_posts_per_month": 12,
     "blog_posts_per_month": 1,
     "gbp_posts_per_month": 4,
     "gbp_image_uploads_per_week": 1,
     "report_day_of_month": 1,
+    "serp_check_day_of_month": 1,
     "review_check_interval_hours": 24,
-    "directory_check_day_of_month": 15,
-    "serp_check_day_of_month": 1
+    "directory_check_day_of_month": 15
+  },
+  "directories_to_monitor": [
+    "google",
+    "yelp",
+    "bbb",
+    "yellowpages",
+    "bing"
+  ],
+  "gsc": {
+    "site_url": "https://moorhousecommercial.com/"
+  },
+  "drive": {
+    "asset_folder_id": ""
   },
   "notifications": {
     "client_email": "client@moorhousecommercial.com",

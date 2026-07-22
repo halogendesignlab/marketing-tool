@@ -58,10 +58,13 @@ class DriveConfig(BaseModel):
     asset_folder_id: str
 
 
-class DataForSEOConfig(BaseModel):
-    serp_keywords: list[str] = []
-    grid_radius_km: int = 15
-    grid_points: int = 25
+class GSCConfig(BaseModel):
+    site_url: str  # e.g. "https://moorhousehomes.com/" — must match exact GSC property URL
+
+
+class LocalFalconConfig(BaseModel):
+    api_key: str = ""
+    place_id: str = ""  # Google Place ID of the business in Local Falcon
 
 
 class ScheduleConfig(BaseModel):
@@ -99,7 +102,8 @@ class ClientConfig(BaseModel):
     gbp: Optional[GBPConfig] = None
     webflow: Optional[WebflowConfig] = None
     drive: Optional[DriveConfig] = None
-    dataforseo: DataForSEOConfig = DataForSEOConfig()
+    gsc: Optional[GSCConfig] = None
+    local_falcon: Optional[LocalFalconConfig] = None
     directories_to_monitor: list[str] = ["google", "yelp", "bbb", "yellowpages", "bing"]
     schedule: ScheduleConfig = ScheduleConfig()
     notifications: NotificationsConfig

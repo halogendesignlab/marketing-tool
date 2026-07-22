@@ -1,12 +1,12 @@
 """routes/reports.py - Performance report endpoints."""
 
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Report, User
-from ..auth import get_current_user
+from ..models import Report, User, UserRole
+from ..auth import get_current_user, require_admin
 from ..schemas import ReportResponse
 
 router = APIRouter()
@@ -63,3 +63,45 @@ def get_latest_report(
         raise HTTPException(status_code=404, detail="No reports found")
 
     return report
+
+
+@router.post("/generate")
+def trigger_report(
+    background_tasks: BackgroundTasks,
+    month: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
+    client_id: Optional[int] = Query(None),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Admin-only: manually trigger report generation for the current (or given) month.
+    If client_id is provided, only generates for that client; otherwise generates for all."""
+    from datetime import datetime, timezone
+    from ..models import Client
+    now = datetime.now(timezone.utc)
+    m = month or now.month
+    y = year or now.year
+
+    if client_id:
+        client = db.query(Client).filter(Client.id == client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        background_tasks.add_task(_run_report_bg, m, y, client.client_id)
+        return {"ok": True, "month": m, "year": y, "client": client.client_id}
+
+    background_tasks.add_task(_run_report_bg, m, y, None)
+    return {"ok": True, "month": m, "year": y}
+
+
+def _run_report_bg(month: int, year: int, client_id_filter: Optional[str] = None):
+    from core.config_loader import load_all_clients
+    from core.report_generator import generate_monthly_report
+    import logging
+    logger = logging.getLogger(__name__)
+    for config in load_all_clients():
+        if client_id_filter and config.client_id != client_id_filter:
+            continue
+        try:
+            generate_monthly_report(config, month, year)
+        except Exception as e:
+            logger.error(f"Report failed for {config.client_id}: {e}")

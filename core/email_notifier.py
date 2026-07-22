@@ -32,18 +32,21 @@ def send_content_ready(
 def send_report_ready(
     to: str,
     brand_name: str,
-    month: str,
+    month: int,
+    year: int,
     portal_url: str = "https://portal.halogendesignlab.com",
 ) -> None:
-    """Notify client that their monthly report is ready."""
+    """Notify admin that the monthly report is ready."""
+    import calendar
+    month_name = f"{calendar.month_name[month]} {year}"
     resend.Emails.send({
         "from": FROM,
         "to": to,
-        "subject": f"{brand_name}: Your {month} performance report is ready",
+        "subject": f"{brand_name}: {month_name} performance report is ready",
         "html": f"""
         <p>Hi,</p>
-        <p>Your {month} performance report for {brand_name} is ready to view.</p>
-        <p><a href="{portal_url}/reports">View your report →</a></p>
+        <p>The {month_name} performance report for {brand_name} has been generated.</p>
+        <p><a href="{portal_url}/reports">View report →</a></p>
         <p>— Halogen Design Labs</p>
         """,
     })

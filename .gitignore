@@ -16,3 +16,15 @@ clients/*/google_creds.json
 *.db
 requirements.local.txt
 .claude/
+
+# One-off debug / utility scripts
+check_*.py
+test_*.py
+delete_*.py
+regen_*.py
+run_serp_now.py
+run_sync.py
+resize_existing.py
+
+# Logs
+*.log

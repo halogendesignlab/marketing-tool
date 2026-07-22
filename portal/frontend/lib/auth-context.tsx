@@ -10,12 +10,13 @@ interface User {
   name: string;
   role: "admin" | "client";
   client_id: number | null;
+  client_ids: number[];
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => void;
   isAdmin: boolean;
 }
@@ -38,11 +39,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<User> => {
     const data = await apiLogin(email, password);
     Cookies.set("token", data.access_token, { expires: 1, sameSite: "strict" });
     const me = await getMe();
     setUser(me);
+    return me;
   };
 
   const logout = () => {

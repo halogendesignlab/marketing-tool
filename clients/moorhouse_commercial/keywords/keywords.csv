@@ -1,0 +1,40 @@
+Keyword,Volume,KD,Intent,Content Type,Priority,Notes
+commercial construction,50,2,Local/Transactional,Service Page,High,Core seed term - primary homepage/service page target. KD from Ahrefs is national; local competition even lower
+commercial general contractor,50,1,Local/Transactional,Service Page,High,"Core positioning match, very low competition"
+commercial builder,50,0,Local/Transactional,Service Page,High,KD 0 - essentially uncontested nationally; very achievable locally
+commercial design build,0,4,Local,Service Page,High,Negligible search volume but directly matches Moorhouse Commercial's stated design-build model - target for brand fit
+office construction,600,0,Local,Service Page,Med,"From Ahrefs overview (national SV 600, KD 0) - office/tenant-improvement niche. Also covers 'commercial office construction'"
+office contractor,90,0,Local,Service Page,Med,"From Ahrefs overview - same office niche, uncontested"
+office renovation contractor,50,,Local,Service Page,Med,Tenant improvement / office renovation niche - good service-page section if offered
+commercial renovation contractors,50,,Local,Service Page,Med,"Renovation-specific niche, distinct from ground-up construction"
+commercial building contractor,50,,Local/Transactional,Service Page,Med,Near-duplicate of 'commercial general contractor' - same page. Also covers 'general contractors for commercial buildings'
+commercial building construction,50,,Local,Service Page,Med,Broader category term
+commercial remodelers,50,,Local,Service Page,Low,Renovation-adjacent niche
+residential and commercial contractors,50,,Local,Landing Page,Med,Bridges both Moorhouse entities - candidate for a cross-linking landing page for prospects unsure which side fits their project. Also covers 'commercial and residential contractor'
+commercial excavation,50,,Local,Service Page,Low,CONFIRM this is an in-house service before targeting (also applies to 'commercial excavation companies/contractors')
+commercial concreting,50,,Local,Service Page,Low,CONFIRM in-house vs subcontracted before targeting
+industrial commercial construction,50,,Local,Service Page,Low,CONFIRM fit with actual client base (office/retail vs industrial)
+"LOCAL / GEO-MODIFIED TERMS (Ahrefs, verified July 2026)",,,,,,
+commercial construction boise,60,N/A,Local,Service Page,High,Strongest verified local term (tied with idaho variant). Lead page titles/GBP with 'commercial construction' phrasing - it beats 'general contractor' phrasing in actual local search behavior
+commercial construction idaho,60,N/A,Local,Service Page,High,"Tied for strongest - statewide phrasing, pairs with boise variant on the same page"
+commercial contractor boise,40,N/A,Local,Service Page,High,Solid secondary local term
+commercial construction companies in boise idaho,20,N/A,Local,GBP/Citation,High,Comparison/directory-style search (Ahrefs tags Local + Commercial intent) - GBP ranking and citation consistency matter most for this one
+commercial contractor meridian,10,N/A,Local,Service Page,Med,Only non-Boise city term with recorded volume - mention Meridian within the main service page rather than a separate city page
+commercial general contractor boise,0-10,N/A,Local,Service Page,Med,Below-threshold volume but keep as secondary phrasing coverage on the main page
+commercial builder boise,0-10,N/A,Local,Service Page,Med,Same - secondary phrasing coverage
+office construction boise,0-10,N/A,Local,Service Page,Med,TI/office niche - low volume but each search is potentially a high-value project
+tenant improvement boise,0-10,N/A,Local,Service Page,Med,Same TI niche logic - keep on the TI service section
+commercial contractor idaho / commercial general contractor idaho,0-10,N/A,Local,Service Page,Low,Statewide secondary variants - phrasing coverage only
+"STRATEGY NOTE: Not indexed in Ahrefs (searched but below tracking threshold): meridian/nampa/caldwell/eagle/treasure valley variants of most terms, commercial design build idaho, commercial renovation boise, office renovation boise, tenant improvement contractor boise, design build commercial boise. These aren't worthless - real searches happen below the threshold and a single search can be a large project - but they shouldn't drive page structure. Recommended structure: ONE strong service page targeting Boise + Idaho phrasing with smaller cities mentioned within it, NOT separate thin pages per city.",,,,,,
+"BUILDING-TYPE TERMS (Ahrefs, national volume, ALL KD 0 — pending client confirmation of served types)",,,,,,
+restaurant construction,900,0,Local/Transactional,Service Page,High,"Tied for highest building-type volume, zero difficulty. Ahrefs tags Local intent - searchers looking for a provider. IF SERVED: dedicated building-type page"
+warehouse construction,900,0,Local/Transactional,Service Page,High,Tied for highest volume. Parent topic is 'warehouse construction companies' - provider-seeking intent. IF SERVED: dedicated page
+retail construction,600,0,Local/Transactional,Service Page,High,"Strong volume, Local intent tag, highest CPC of the retail-adjacent set ($2.50) signaling commercial value. IF SERVED: dedicated page"
+office building construction,500,0,Local/Transactional,Service Page,High,Pairs with existing office construction / TI terms already in this sheet. IF SERVED: likely the first building-type page to build given their office/TI lean
+church construction,400,0,Informational,Service Page,Med,"Also 'church building contractor' (SV 40, Local intent). Churches are a classic design-build niche. IF SERVED: page + the contractor variant as secondary phrasing"
+dental office construction,400,0,Local/Transactional,Service Page,High,"$4.00 CPC - highest commercial signal in the batch. Dental buildouts are high-value specialized projects. IF SERVED: strong niche page, pairs with medical office below"
+medical office construction,250,0,Local/Transactional,Service Page,High,Parent topic 'medical office construction company' = provider-seeking. Combine with dental into a medical/dental page or keep separate if both served. Supports the Month 8 calendar post
+gym construction,150,0,Local/Transactional,Service Page,Med,Smaller niche but zero competition. IF SERVED: worth a page
+daycare construction,100,0,Local,Service Page,Med,"$25.00 CPC (!) - extreme commercial signal, advertisers pay heavily for these clicks. Licensing-driven construction requirements make this a specialized niche. IF SERVED: high-value page despite modest volume"
+retail construction boise,0-10,N/A,Local,Service Page,Low,"Only local building-type variant with any index presence - the rest (medical office boise, warehouse boise, restaurant idaho, auto shop) came back not indexed. Same below-threshold logic: keep geo phrasing on pages, don't build strategy on it"
+"STRATEGY NOTE: Building-type terms are the clearest open lane found in this research - real national volume, KD 0 across the board, and provider-seeking intent tags. National volume with local intent means each building-type page should target the national term + Boise/Idaho phrasing within it. Await client confirmation on served types before building pages; cut any type they don't serve. Auto shop construction not indexed - skip.",,,,,,

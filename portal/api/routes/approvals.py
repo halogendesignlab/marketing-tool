@@ -9,28 +9,265 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import ContentItem, ContentStatus, User
 from ..auth import get_current_user
-from ..schemas import ContentItemResponse, ApproveContentRequest, RejectContentRequest
+from ..schemas import ContentItemResponse, ApproveContentRequest, RejectContentRequest, GenerateDraftRequest
 
 router = APIRouter()
+
+
+@router.post("/generate", response_model=ContentItemResponse)
+def generate_draft(
+    req: GenerateDraftRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate a content draft on demand and save it as pending_approval."""
+    from core.config_loader import load_client_config
+    from core.content_generator import generate_captions_from_image, generate_blog_draft, generate_gbp_post
+    from ..models import Client, MediaItem, ContentType, Platform
+
+    # Resolve client
+    if current_user.role == "admin" and req.client_id:
+        client_db_id = req.client_id
+    elif current_user.client_id:
+        client_db_id = current_user.client_id
+    else:
+        raise HTTPException(status_code=400, detail="No client context")
+
+    client_row = db.query(Client).filter(Client.id == client_db_id).first()
+    if not client_row:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    config = load_client_config(client_row.client_id)
+
+    if req.content_type == "social_caption":
+        if not req.media_item_id:
+            raise HTTPException(status_code=400, detail="media_item_id required for social captions")
+        # Also allow items from the shared media source client (if this client delegates its library)
+        allowed_client_ids = {client_db_id}
+        if client_row.media_source_client_id:
+            allowed_client_ids.add(client_row.media_source_client_id)
+        media_item = db.query(MediaItem).filter(
+            MediaItem.id == req.media_item_id,
+            MediaItem.client_id.in_(allowed_client_ids),
+        ).first()
+        if not media_item:
+            raise HTTPException(status_code=404, detail="Media item not found")
+
+        captions = generate_captions_from_image(
+            config=config,
+            image_path=media_item.url,
+            image_filename=media_item.filename,
+            image_meta=media_item.meta,
+        )
+
+        # Resolve platform list — prefer req.platforms, fall back to req.platform
+        selected_platforms: list[str] = req.platforms or ([req.platform] if req.platform else ["instagram"])
+        selected_platforms = [p for p in selected_platforms if p]  # strip empties
+
+        # Validate all platform values
+        platform_enums: list[Platform] = []
+        for p in selected_platforms:
+            try:
+                platform_enums.append(Platform(p))
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Unknown platform: {p}")
+
+        # Primary platform drives the caption body (instagram is most versatile)
+        PRIORITY = ["instagram", "facebook", "linkedin", "gbp"]
+        primary = next((p for p in PRIORITY if p in selected_platforms), selected_platforms[0])
+        body = captions.get(primary) or next((v for v in captions.values() if v), "")
+
+        item = ContentItem(
+            client_id=client_db_id,
+            content_type=ContentType.social_caption,
+            platform=platform_enums[0],   # primary platform for display/badge
+            status=ContentStatus.pending_approval,
+            body=body,
+            image_url=media_item.url,
+            meta={
+                "platforms": selected_platforms,
+                "captions": {p: captions.get(p, "") for p in selected_platforms},
+            },
+        )
+        from datetime import datetime, timezone
+        media_item.last_used_at = datetime.now(timezone.utc)
+
+    elif req.content_type == "blog_post":
+        draft = generate_blog_draft(config, topic=req.topic or None)
+
+        # Select images from the media library that best match the article
+        from sqlalchemy import nullsfirst
+        from ..settings import get_settings
+        from ..models import MediaItem as _MediaItem
+        from core.content_generator import select_blog_images
+
+        _api_url = get_settings().API_URL.rstrip("/")
+        _allowed_ids = {client_db_id}
+        if client_row.media_source_client_id:
+            _allowed_ids.add(client_row.media_source_client_id)
+
+        # Load all candidates ordered LRU, build one representative per project
+        all_candidates = (
+            db.query(_MediaItem)
+            .filter(_MediaItem.client_id.in_(_allowed_ids))
+            .order_by(nullsfirst(_MediaItem.last_used_at.asc()))
+            .all()
+        )
+
+        # One rep per project (first = LRU within that project)
+        project_reps: dict[str, _MediaItem] = {}
+        no_project: list[_MediaItem] = []
+        for m in all_candidates:
+            project = (m.meta or {}).get("project") if m.meta else None
+            if project:
+                if project not in project_reps:
+                    project_reps[project] = m
+            else:
+                if len(no_project) < 3:
+                    no_project.append(m)
+
+        # Ask Claude to pick the best-matching projects
+        blog_media = select_blog_images(
+            title=draft["title"],
+            body_excerpt=draft["body"][:600],
+            project_reps=project_reps,
+            count=3,
+        )
+
+        # Fall back to unorganised items if library has no project metadata
+        if not blog_media:
+            blog_media = no_project[:3]
+
+        blog_image_urls = [m.url for m in blog_media]
+        absolute_image_urls = [
+            u if u.startswith("http") else f"{_api_url}{u}"
+            for u in blog_image_urls
+        ]
+        enriched_body = _inject_blog_images(draft["body"], absolute_image_urls)
+
+        # Update last_used_at on selected images
+        from datetime import datetime, timezone as _tz
+        _now = datetime.now(_tz.utc)
+        for m in blog_media:
+            m.last_used_at = _now
+
+        item = ContentItem(
+            client_id=client_db_id,
+            content_type=ContentType.blog_post,
+            status=ContentStatus.pending_approval,
+            title=draft["title"],
+            body=enriched_body,
+            image_url=blog_image_urls[0] if blog_image_urls else None,
+            meta={"blog_images": blog_image_urls} if blog_image_urls else None,
+        )
+
+    elif req.content_type == "gbp_post":
+        body = generate_gbp_post(config, topic=req.topic or None)
+        item = ContentItem(
+            client_id=client_db_id,
+            content_type=ContentType.gbp_post,
+            platform=Platform.gbp,
+            status=ContentStatus.pending_approval,
+            body=body,
+        )
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown content_type: {req.content_type}")
+
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
 
 
 @router.get("/", response_model=list[ContentItemResponse])
 def list_pending(
     client_id: Optional[int] = None,
+    status: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all pending approval items. Clients see only their own."""
-    query = db.query(ContentItem).filter(
-        ContentItem.status == ContentStatus.pending_approval
-    )
-
-    if current_user.role != "admin":
-        query = query.filter(ContentItem.client_id == current_user.client_id)
-    elif client_id:
-        query = query.filter(ContentItem.client_id == client_id)
+    """
+    Admins see all content items (filterable by status).
+    Clients see items in client_review (sent to them for approval).
+    """
+    if current_user.role == "admin":
+        query = db.query(ContentItem)
+        if client_id:
+            query = query.filter(ContentItem.client_id == client_id)
+        if status:
+            try:
+                query = query.filter(ContentItem.status == ContentStatus(status))
+            except ValueError:
+                pass  # ignore unknown status values
+    else:
+        client_ids = current_user.client_ids
+        query = db.query(ContentItem).filter(
+            ContentItem.status == ContentStatus.client_review,
+            ContentItem.client_id.in_(client_ids),
+        )
 
     return query.order_by(ContentItem.created_at.desc()).all()
+
+
+@router.delete("/{item_id}")
+def delete_item(
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Admin permanently deletes a content item (discard)."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    item = db.query(ContentItem).filter(ContentItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Content item not found")
+    db.delete(item)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{item_id}/recall", response_model=ContentItemResponse)
+def recall_item(
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Admin recalls a draft from client review back to pending_approval."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    item = _get_item(item_id, current_user, db)
+    if item.status != ContentStatus.client_review:
+        raise HTTPException(status_code=400, detail="Item is not in client review")
+    item.status = ContentStatus.pending_approval
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.post("/{item_id}/send-to-client", response_model=ContentItemResponse)
+def send_to_client(
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Admin sends a draft to the client for their approval."""
+    from ..auth import require_admin  # noqa
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    item = _get_item(item_id, current_user, db)
+    sendable = {ContentStatus.pending_approval, ContentStatus.rejected}
+    if item.status not in sendable:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Item cannot be sent to client (current: {item.status})"
+        )
+    item.status = ContentStatus.client_review
+    item.rejection_reason = None  # clear any previous rejection note
+    db.commit()
+    db.refresh(item)
+    return item
 
 
 @router.post("/{item_id}/approve", response_model=ContentItemResponse)
@@ -43,10 +280,11 @@ def approve_item(
 ):
     item = _get_item(item_id, current_user, db)
 
-    if item.status != ContentStatus.pending_approval:
+    approvable = {ContentStatus.pending_approval, ContentStatus.client_review, ContentStatus.rejected}
+    if item.status not in approvable:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Item is not pending approval (current status: {item.status})"
+            detail=f"Item cannot be approved (current status: {item.status})"
         )
 
     if payload.body:
@@ -68,6 +306,92 @@ def approve_item(
     return item
 
 
+@router.post("/{item_id}/regenerate-caption", response_model=ContentItemResponse)
+def regenerate_caption(
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Re-run Claude vision on the same image to produce a new caption."""
+    from core.config_loader import load_client_config
+    from core.content_generator import generate_captions_from_image
+    from ..models import Client
+
+    item = _get_item(item_id, current_user, db)
+    if not item.image_url:
+        raise HTTPException(status_code=400, detail="Item has no image to generate caption from")
+
+    client_row = db.query(Client).filter(Client.id == item.client_id).first()
+    if not client_row:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    config = load_client_config(client_row.client_id)
+    captions = generate_captions_from_image(config=config, image_path=item.image_url)
+
+    platform_key = item.platform.value if item.platform else None
+    if platform_key == "gbp":
+        new_body = captions.get("gbp", "")
+    elif platform_key:
+        new_body = captions.get(platform_key, "")
+    else:
+        new_body = captions.get("instagram", "")
+
+    item.body = new_body
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.post("/{item_id}/regenerate-post", response_model=ContentItemResponse)
+def regenerate_post(
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Pick the next least-recently-used image and regenerate caption for this platform."""
+    from core.config_loader import load_client_config
+    from core.content_generator import generate_captions_from_image
+    from ..models import Client, MediaItem
+    from datetime import datetime, timezone
+
+    item = _get_item(item_id, current_user, db)
+    client_row = db.query(Client).filter(Client.id == item.client_id).first()
+    if not client_row:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    from sqlalchemy import nullsfirst
+    media_item = (
+        db.query(MediaItem)
+        .filter(MediaItem.client_id == item.client_id)
+        .order_by(nullsfirst(MediaItem.last_used_at.asc()))
+        .first()
+    )
+    if not media_item:
+        raise HTTPException(status_code=400, detail="No media items in library")
+
+    config = load_client_config(client_row.client_id)
+    captions = generate_captions_from_image(
+        config=config,
+        image_path=media_item.url,
+        image_filename=media_item.filename,
+    )
+
+    platform_key = item.platform.value if item.platform else None
+    if platform_key == "gbp":
+        new_body = captions.get("gbp", "")
+    elif platform_key:
+        new_body = captions.get(platform_key, "")
+    else:
+        new_body = captions.get("instagram", "")
+
+    item.body = new_body
+    item.image_url = media_item.url
+    media_item.last_used_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 @router.post("/{item_id}/reject", response_model=ContentItemResponse)
 def reject_item(
     item_id: int,
@@ -77,10 +401,11 @@ def reject_item(
 ):
     item = _get_item(item_id, current_user, db)
 
-    if item.status != ContentStatus.pending_approval:
+    rejectable = {ContentStatus.pending_approval, ContentStatus.client_review}
+    if item.status not in rejectable:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Item is not pending approval (current status: {item.status})"
+            detail=f"Item cannot be rejected (current status: {item.status})"
         )
 
     item.status = ContentStatus.rejected
@@ -92,13 +417,62 @@ def reject_item(
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def _img_block(url: str) -> str:
+    return (
+        f'<figure style="margin:2rem 0;">'
+        f'<img src="{url}" alt="" '
+        f'style="max-width:100%;height:auto;border-radius:6px;display:block;" />'
+        f'</figure>'
+    )
+
+
+def _inject_blog_images(html: str, image_urls: list[str]) -> str:
+    """Insert image blocks at natural section breaks in blog HTML.
+
+    Strategy:
+      - First image: after the opening (hook) paragraph
+      - Second image: after the first <h2> section's first </p>
+      - Third image (if present): after the second <h2> section's first </p>
+    """
+    if not image_urls:
+        return html
+
+    img_index = 0
+    cursor = 0  # tracks position in the (growing) html string
+
+    # 1. Insert first image after the very first </p>
+    first_p = html.find("</p>", cursor)
+    if first_p != -1 and img_index < len(image_urls):
+        block = "\n" + _img_block(image_urls[img_index]) + "\n"
+        insert_at = first_p + len("</p>")
+        html = html[:insert_at] + block + html[insert_at:]
+        cursor = insert_at + len(block)
+        img_index += 1
+
+    # 2. Insert remaining images after each successive <h2> section's first </p>
+    while img_index < len(image_urls):
+        h2_pos = html.find("<h2", cursor)
+        if h2_pos == -1:
+            break
+        next_p_end = html.find("</p>", h2_pos)
+        if next_p_end == -1:
+            break
+        block = "\n" + _img_block(image_urls[img_index]) + "\n"
+        insert_at = next_p_end + len("</p>")
+        html = html[:insert_at] + block + html[insert_at:]
+        cursor = insert_at + len(block)
+        img_index += 1
+
+    return html
+
+
 def _get_item(item_id: int, current_user: User, db: Session) -> ContentItem:
     item = db.query(ContentItem).filter(ContentItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Content item not found")
 
-    # Clients can only act on their own content
-    if current_user.role != "admin" and item.client_id != current_user.client_id:
+    # Clients can only act on content belonging to their assigned clients
+    if current_user.role != "admin" and item.client_id not in current_user.client_ids:
         raise HTTPException(status_code=403, detail="Access denied")
 
     return item
@@ -138,10 +512,12 @@ def _maybe_publish_now(item_id: int):
         db.commit()
 
         if item.content_type == ContentType.social_caption and item.platform:
+            # Use all platforms from meta if available, otherwise fall back to single platform
+            publish_platforms = (item.meta or {}).get("platforms") or [item.platform.value]
             result = publish_social_post(
                 config=config,
                 body=item.body,
-                platforms=[item.platform.value],
+                platforms=publish_platforms,
                 image_url=item.image_url,
                 as_draft=False,
             )

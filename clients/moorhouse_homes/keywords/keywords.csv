@@ -1,0 +1,35 @@
+Keyword,Volume,KD,Intent,Content Type,Priority,Notes
+custom home builder,500,,Local/Transactional,Service Page,High,"Core seed term - highest local volume, primary homepage/service page target"
+custom home builder near me,500,,Local,Service Page,High,Strong local intent - ensure GBP + service page target this phrasing. Also covers 'custom homebuilder near me' (same volume)
+home builder,500,,Local/Transactional,Service Page,High,Broader term - risks production-builder competition but worth supporting coverage
+custom house builder,500,,Local/Transactional,Service Page,Med,Near-duplicate of 'custom home builder' (also plural variant at same volume) - same page targets both
+builder for custom homes,500,,Local/Transactional,Service Page,Med,"Also covers 'builder for homes', 'builder of homes' - phrasing coverage on main service page, not separate pages"
+custom home design build,50,,Local,Service Page,High,"Directly matches Moorhouse's design-build positioning - strong candidate for dedicated design-build explainer page. Also covers 'custom home design and build', 'home design build', 'design build company'"
+custom built homes,50,,Local,Project/Portfolio Page,Med,Portfolio page framing ('See our custom built homes'). Also covers 'new custom homes'
+custom home designer,50,,Local,Service Page,Med,Ties to Design & Planning service category
+custom home construction,50,,Local,Service Page,Med,Direct variant of core term
+custom house design,50,,Local,Service Page,Med,Design-focused variant
+home building company,50,,Local,About Page,Med,About/Company page positioning
+new construction homes,50,,Local,Service Page,Med,Confirm new-build focus fit
+building a home,50,,Informational,Blog Post,Med,Process-education topic - pairs with 'Our Process' page
+custom home contractors,50,,Local,Service Page,Low,'Contractor' framing slightly off-brand but worth light coverage
+dream home builder,50,,Informational,Blog Post,Low,Aspirational term - better for taglines/blog copy than a dedicated page
+house planner,500,,Informational,N/A,Low,Ambiguous intent (likely software/floor-plan searches) - verify SERP before targeting. Same for 'house design planner'
+"LOCAL / GEO-MODIFIED TERMS (Ahrefs, verified July 2026)",,,,,,
+parade of homes boise,200,0,Local/Informational,Landing Page,High,"BIGGEST local term in the pull - bigger than any service term, KD 0. Moorhouse participates; their Parade entry pages should be aggressively optimized. Also 'parade of homes idaho' (40). Consumers researching builders = ideal audience"
+custom home builder boise,150,N/A,Local,Service Page / Homepage,High,Top service term (tied) - primary homepage target
+new construction homes meridian,150,N/A,Local,Service Page,High,Tied for top - real Meridian-level demand exists on residential side (unlike Commercial)
+custom home builder idaho,100,24,Local,Service Page,High,KD 24 - moderate real competition. Parent topic 'legacy homes idaho' = competitor dominating this SERP (run through Site Explorer)
+home builder boise,100,N/A,Local,Service Page / Homepage,High,$3.50 CPC - strong commercial signal
+custom home builder nampa,80,N/A,Local,Service Page (city),High,Suburb demand is REAL on residential side - 80/mo exceeds Commercial's best local term. Justifies a Nampa city page IF they have Nampa projects (Saddle Ridge is in S Nampa per legacy site)
+new construction homes boise,60,4,Local,Service Page,Med,"Parent topic 'new homes in boise idaho' - partially production-builder SERP, verify fit"
+custom home builder treasure valley,60,N/A,Local,Service Page,Med,Regional phrasing - homepage/service page coverage
+custom homes boise,50,N/A,Local,Service Page,Med,$3.50 CPC
+custom home builders boise idaho,40,35,Local,Service Page,Med,KD 35 - the most contested term in the pull; plural+geo phrasing on same Boise page
+cost to build a custom home idaho,30,N/A,Informational,Blog Post,High,Real volume for the cost topic - promotes the cost-to-build calendar post to an earlier slot
+custom homes meridian / home builder meridian / custom home builder meridian,30+30+10,N/A,Local,Service Page (city),Med,"Combined ~70/mo across Meridian variants + 150 for new construction meridian - justifies a Meridian page (their home base, Ashford Greens/Spurwing projects)"
+custom home builder star idaho,20,N/A,Local,Service Page (city),Low,Star registers - mention on site; page only if project inventory supports it
+custom home builder eagle idaho,20,N/A,Local,Service Page (city),Med,Eagle registers + they have Big Sky Estates projects there - page justified if content available
+luxury home builder idaho / boise,20+10,N/A,Local,Service Page,Low,"Luxury phrasing is thin - it's brand positioning, not search behavior. Lead pages with 'custom', use 'luxury' as supporting copy"
+custom home builder mccall,10,N/A,Local,Service Page,Low,"McCall barely registers despite being in service area - mention, don't build for"
+"STRATEGY NOTES: (1) Unlike Moorhouse Commercial, suburb-level demand is REAL here - Nampa 80, Meridian ~220 combined, Eagle 20, Star 20. A small set of city pages (Meridian, Nampa, Eagle) is data-justified IF backed by actual projects in each city. (2) KD 24-37 on core terms means real competition exists (unlike Commercial's KD 0-2) - content quality matters more on this side. (3) Competitors identified from parent topics: Legacy Homes Idaho and Tresidio Homes dominate core SERPs - run both through Site Explorer. (4) Not indexed: build a custom home boise, cost to build a house boise, custom home design build idaho, custom homes eagle idaho, design build home boise, home builder eagle idaho, luxury custom home builder boise, build on your lot boise (skip).",,,,,,

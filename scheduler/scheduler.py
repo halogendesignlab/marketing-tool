@@ -6,14 +6,13 @@ from apscheduler.triggers.cron import CronTrigger
 
 from core.config_loader import load_all_clients, ClientConfig
 from core.content_generator import (
-    generate_social_captions_batch,
     generate_blog_draft,
     generate_gbp_post,
+    generate_captions_from_image,
 )
-from core.drive_watcher import check_for_new_assets
 from core.email_notifier import send_content_ready
 from portal.api.database import SessionLocal
-from portal.api.models import ContentItem, ContentType, ContentStatus, Platform, Asset
+from portal.api.models import ContentItem, ContentType, ContentStatus, Platform, MediaItem
 
 logger = logging.getLogger(__name__)
 
@@ -23,30 +22,63 @@ scheduler = BackgroundScheduler(timezone="UTC")
 # ── Job functions ─────────────────────────────────────────────────────────────
 
 def generate_social_captions_job(client_id: str):
-    """Generate weekly social captions for all platforms and queue for approval."""
+    """Generate weekly social posts from media library using Claude vision."""
     from core.config_loader import load_client_config
+    from datetime import datetime, timezone
+
     config = load_client_config(client_id)
     db = SessionLocal()
 
     try:
+        db_client_id = _get_db_client_id(db, client_id)
+
+        # Pick least-recently-used media item (null last_used_at = never used, comes first)
+        from sqlalchemy import nullsfirst
+        media_item = (
+            db.query(MediaItem)
+            .filter(MediaItem.client_id == db_client_id)
+            .order_by(nullsfirst(MediaItem.last_used_at.asc()))
+            .first()
+        )
+
+        if not media_item:
+            logger.warning(f"[{client_id}] No media items in library — skipping weekly captions")
+            return
+
+        captions = generate_captions_from_image(
+            config=config,
+            image_path=media_item.url,
+            image_filename=media_item.filename,
+            image_meta=media_item.meta,
+        )
+
+        platform_map = {
+            "instagram": Platform.instagram,
+            "facebook": Platform.facebook,
+            "linkedin": Platform.linkedin,
+            "gbp": Platform.gbp,
+        }
+
         total = 0
-        for platform in ["instagram", "facebook", "linkedin"]:
-            captions = generate_social_captions_batch(config, platform, count=3)
-            for caption in captions:
-                item = ContentItem(
-                    client_id=_get_db_client_id(db, client_id),
-                    content_type=ContentType.social_caption,
-                    platform=Platform(platform),
-                    status=ContentStatus.pending_approval,
-                    body=caption,
-                )
-                db.add(item)
-                total += 1
+        for platform_key, platform_enum in platform_map.items():
+            caption_text = captions.get(platform_key, "")
+            if not caption_text:
+                continue
+            item = ContentItem(
+                client_id=db_client_id,
+                content_type=ContentType.social_caption,
+                platform=platform_enum,
+                status=ContentStatus.pending_approval,
+                body=caption_text,
+                image_url=media_item.url,
+            )
+            db.add(item)
+            total += 1
 
+        media_item.last_used_at = datetime.now(timezone.utc)
         db.commit()
-        logger.info(f"[{client_id}] Generated {total} social captions")
+        logger.info(f"[{client_id}] Generated {total} platform captions from image {media_item.filename}")
 
-        # Notify client
         send_content_ready(
             to=config.notifications.client_email,
             brand_name=config.brand_name,
@@ -124,51 +156,11 @@ def generate_gbp_post_job(client_id: str):
         db.close()
 
 
-def check_drive_assets_job(client_id: str):
-    """Check Google Drive for new image assets and queue them."""
-    from core.config_loader import load_client_config
-    config = load_client_config(client_id)
-    db = SessionLocal()
-
-    try:
-        db_client_id = _get_db_client_id(db, client_id)
-
-        # Get already-known Drive file IDs
-        known = {
-            a.drive_file_id for a in
-            db.query(Asset.drive_file_id)
-            .filter(Asset.client_id == db_client_id, Asset.drive_file_id.isnot(None))
-            .all()
-        }
-
-        new_files = check_for_new_assets(config, known)
-
-        for f in new_files:
-            asset = Asset(
-                client_id=db_client_id,
-                filename=f["filename"],
-                drive_file_id=f["drive_file_id"],
-                local_path=f["local_path"],
-                status="pending",
-            )
-            db.add(asset)
-
-        db.commit()
-        if new_files:
-            logger.info(f"[{client_id}] Queued {len(new_files)} new assets from Drive")
-
-    except Exception as e:
-        logger.error(f"[{client_id}] Drive asset check failed: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
 
 def publish_approved_content_job(client_id: str):
     """Publish all approved content that is due."""
     from core.config_loader import load_client_config
     from core.publer_publisher import publish_social_post, publish_gbp_post
-    from core.webflow_publisher import publish_blog_post
     from core.email_notifier import send_publish_failure
     from datetime import datetime, timezone
 
@@ -208,12 +200,8 @@ def publish_approved_content_job(client_id: str):
                     item.publer_post_id = str(result.get("job_id", ""))
 
                 elif item.content_type == ContentType.blog_post:
-                    publish_blog_post(
-                        config=config,
-                        title=item.title or "Untitled",
-                        body=item.body,
-                        publish_immediately=True,
-                    )
+                    # Blog posts are approved in the portal for reference — no external publisher
+                    pass
 
                 item.status = ContentStatus.published
                 item.published_at = now
@@ -241,12 +229,150 @@ def publish_approved_content_job(client_id: str):
         db.close()
 
 
+def sync_drive_media_job(client_id: str):
+    """Sync new photos from Google Drive into the media library."""
+    from core.config_loader import load_client_config
+    from core.drive_watcher import sync_drive_to_media_library
+
+    config = load_client_config(client_id)
+    db = SessionLocal()
+
+    try:
+        db_client_id = _get_db_client_id(db, client_id)
+        new_count = sync_drive_to_media_library(config, db_client_id, db)
+        if new_count:
+            logger.info(f"[{client_id}] Drive sync complete — {new_count} new photo(s) imported")
+        else:
+            logger.debug(f"[{client_id}] Drive sync — no new photos")
+    except Exception as e:
+        logger.error(f"[{client_id}] Drive sync job failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def check_reviews_job(client_id: str):
+    """Fetch reviews, save new ones, and auto-mark responded if owner reply detected."""
+    from core.config_loader import load_client_config
+    from core.review_monitor import fetch_all_reviews
+    from core.email_notifier import send_review_alert
+    from portal.api.models import Review, ReviewPlatform
+    from datetime import datetime, timezone
+
+    config = load_client_config(client_id)
+    db = SessionLocal()
+
+    try:
+        db_client_id = _get_db_client_id(db, client_id)
+
+        existing = {
+            r.external_id: r for r in
+            db.query(Review).filter(Review.client_id == db_client_id).all()
+        }
+
+        all_reviews = fetch_all_reviews(config)
+        new_count = 0
+
+        for r in all_reviews:
+            external_id = r["external_id"]
+            has_response = r.get("has_owner_response", False)
+
+            if external_id in existing:
+                # Update responded_at if owner reply now detected
+                review = existing[external_id]
+                if has_response and review.responded_at is None:
+                    review.responded_at = datetime.now(timezone.utc)
+                    db.commit()
+                    logger.info(f"[{client_id}] Marked review {external_id} as responded")
+                continue
+
+            # New review
+            try:
+                platform_enum = ReviewPlatform(r["platform"])
+            except ValueError:
+                continue
+
+            review = Review(
+                client_id=db_client_id,
+                platform=platform_enum,
+                external_id=external_id,
+                reviewer_name=r.get("reviewer_name"),
+                rating=r.get("rating"),
+                body=r.get("body"),
+                responded_at=datetime.now(timezone.utc) if has_response else None,
+            )
+            db.add(review)
+            db.commit()
+            new_count += 1
+
+            if not has_response:
+                try:
+                    send_review_alert(
+                        to=config.notifications.admin_email,
+                        brand_name=config.brand_name,
+                        platform=r["platform"],
+                        rating=r.get("rating"),
+                    )
+                except Exception:
+                    pass
+
+        logger.info(f"[{client_id}] Review check done — {new_count} new review(s)")
+
+    except Exception as e:
+        logger.error(f"[{client_id}] Review check job failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def run_serp_checks_job(client_id: str):
+    """Run geo-grid SERP scans and store results."""
+    from core.config_loader import load_client_config
+    from core.report_generator import run_serp_checks
+    from datetime import datetime, timezone
+
+    config = load_client_config(client_id)
+    now = datetime.now(timezone.utc)
+    try:
+        run_serp_checks(config, now.month, now.year)
+    except Exception as e:
+        logger.error(f"[{client_id}] SERP checks job failed: {e}")
+
+
+def generate_report_job(client_id: str):
+    """Generate the monthly report (runs after SERP checks on the same day)."""
+    from core.config_loader import load_client_config
+    from core.report_generator import generate_monthly_report
+    from core.email_notifier import send_report_ready
+    from datetime import datetime, timezone
+
+    config = load_client_config(client_id)
+    now = datetime.now(timezone.utc)
+    # Report covers the previous month
+    month = now.month - 1 if now.month > 1 else 12
+    year = now.year if now.month > 1 else now.year - 1
+
+    try:
+        generate_monthly_report(config, month, year)
+        try:
+            send_report_ready(
+                to=config.notifications.admin_email,
+                brand_name=config.brand_name,
+                month=month,
+                year=year,
+            )
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error(f"[{client_id}] Report generation job failed: {e}")
+
+
 # ── Scheduler setup ───────────────────────────────────────────────────────────
 
 def register_client_jobs(config: ClientConfig):
     """Register all cron jobs for a single client."""
     cid = config.client_id
-    sched = config.schedule
+    sched = config.schedule  # noqa: F841 — used below for day-of-month settings
 
     # Social captions — every Monday at 06:00 UTC
     scheduler.add_job(
@@ -275,21 +401,49 @@ def register_client_jobs(config: ClientConfig):
         replace_existing=True,
     )
 
-    # Drive asset check — every 6 hours
-    scheduler.add_job(
-        check_drive_assets_job,
-        CronTrigger(hour="*/6"),
-        args=[cid],
-        id=f"{cid}_drive_check",
-        replace_existing=True,
-    )
-
     # Publish approved content — every 15 minutes
     scheduler.add_job(
         publish_approved_content_job,
         CronTrigger(minute="*/15"),
         args=[cid],
         id=f"{cid}_publish",
+        replace_existing=True,
+    )
+
+    # Drive media sync — every 6 hours (only runs if drive folder is configured)
+    scheduler.add_job(
+        sync_drive_media_job,
+        CronTrigger(hour="*/6", minute=30),
+        args=[cid],
+        id=f"{cid}_drive_sync",
+        replace_existing=True,
+    )
+
+    # Review check — every N hours (configurable); use interval trigger to avoid cron hour-range limits
+    from apscheduler.triggers.interval import IntervalTrigger
+    scheduler.add_job(
+        check_reviews_job,
+        IntervalTrigger(hours=sched.review_check_interval_hours),
+        args=[cid],
+        id=f"{cid}_reviews",
+        replace_existing=True,
+    )
+
+    # SERP geo-grid scan — configurable day of month at 02:00 UTC
+    scheduler.add_job(
+        run_serp_checks_job,
+        CronTrigger(day=sched.serp_check_day_of_month, hour=2, minute=0),
+        args=[cid],
+        id=f"{cid}_serp",
+        replace_existing=True,
+    )
+
+    # Monthly report — configurable day of month at 03:00 UTC
+    scheduler.add_job(
+        generate_report_job,
+        CronTrigger(day=sched.report_day_of_month, hour=3, minute=0),
+        args=[cid],
+        id=f"{cid}_report",
         replace_existing=True,
     )
 

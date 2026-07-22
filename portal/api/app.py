@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .settings import get_settings
-from .routes import auth, clients, content, approvals, assets, reports, reviews, directories, media
+from .routes import auth, clients, content, approvals, assets, reports, reviews, directories, media, users
 from .database import engine, Base
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,39 @@ async def lifespan(app: FastAPI):
     # Create database tables if they don't exist
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created/verified")
+
+    # Migrate: add media_source_client_id column if not present (SQLite)
+    try:
+        from sqlalchemy import text as _text
+        from .database import SessionLocal as _SL
+        _db2 = _SL()
+        try:
+            _db2.execute(_text("ALTER TABLE clients ADD COLUMN media_source_client_id INTEGER REFERENCES clients(id)"))
+            _db2.commit()
+            logger.info("Added media_source_client_id column")
+        except Exception:
+            pass  # Column already exists
+        finally:
+            _db2.close()
+    except Exception as e:
+        logger.error(f"media_source_client_id migration failed: {e}")
+
+    # Migrate: populate user_clients from existing client_id values
+    try:
+        from sqlalchemy import text
+        from .database import SessionLocal
+        _db = SessionLocal()
+        try:
+            _db.execute(text(
+                "INSERT OR IGNORE INTO user_clients (user_id, client_id) "
+                "SELECT id, client_id FROM users WHERE client_id IS NOT NULL"
+            ))
+            _db.commit()
+            logger.info("user_clients migration complete")
+        finally:
+            _db.close()
+    except Exception as e:
+        logger.error(f"user_clients migration failed: {e}")
     
     # Start the scheduler
     try:
@@ -73,6 +106,7 @@ def create_app() -> FastAPI:
     app.include_router(reviews.router, prefix="/api/reviews", tags=["reviews"])
     app.include_router(directories.router, prefix="/api/directories", tags=["directories"])
     app.include_router(media.router, prefix="/api/media", tags=["media"])
+    app.include_router(users.router, prefix="/api/users", tags=["users"])
 
     # Serve uploaded images publicly so Publer can download them
     uploads_dir = Path(__file__).parent.parent.parent / "uploads"

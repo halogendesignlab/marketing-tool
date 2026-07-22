@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     SECRET_KEY: str
     ALLOWED_ORIGINS: str = "http://localhost:3000"
+    API_URL: str = "http://localhost:8000"  # Public base URL of this API (used for absolute image URLs in published HTML)
 
     # Database
     DATABASE_URL: str
@@ -36,6 +37,13 @@ class Settings(BaseSettings):
 
     # Google Service Account (Drive + GA4)
     GOOGLE_SERVICE_ACCOUNT_FILE: str = "credentials/google-service-account.json"
+
+    # Cloudflare R2
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET_NAME: str = ""
+    R2_PUBLIC_URL: str = ""  # e.g. https://pub-xxxx.r2.dev
 
     # Admin
     ADMIN_EMAIL: str = ""

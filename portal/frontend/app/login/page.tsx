@@ -16,8 +16,8 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(email, password);
-      router.push("/dashboard");
+      const me = await login(email, password);
+      router.push(me?.role === "client" ? "/approvals" : "/dashboard");
     } catch {
       toast.error("Invalid email or password");
     } finally {

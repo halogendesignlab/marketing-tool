@@ -1,22 +1,34 @@
-"""drive_watcher.py — Watch a Google Drive folder for new image assets."""
+"""drive_watcher.py — Sync image metadata from Google Drive into the media library.
 
-import os
-import tempfile
+Images are resized to 1080px max on the longest edge before uploading to R2,
+keeping storage small and grid loads fast. Files are fetched from Drive using
+a service account and uploaded in parallel using a thread pool.
+"""
+
+import io
+import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+
 from .config_loader import ClientConfig
 from portal.api.settings import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 SUPPORTED_MIME_TYPES = {
-    "image/jpeg", "image/png", "image/webp", "image/gif"
+    "image/jpeg", "image/png", "image/webp", "image/gif",
 }
+SKIP_FOLDER_KEYWORDS = ["not allowed", "do not use", "do not post"]
 
-ASSETS_DIR = Path(__file__).parent.parent / "assets"
+# Resize images to this max dimension before uploading (1080px = ideal for social media)
+MAX_IMAGE_DIMENSION = 1080
+UPLOAD_WORKERS = 8
 
 
 def _drive_service():
@@ -24,67 +36,312 @@ def _drive_service():
         settings.GOOGLE_SERVICE_ACCOUNT_FILE,
         scopes=SCOPES,
     )
-    return build("drive", "v3", credentials=creds)
+    return build("drive", "v3", credentials=creds, cache_discovery=False)
 
 
-def list_new_files(config: ClientConfig, known_file_ids: set[str]) -> list[dict]:
-    """Return files in the client's Drive folder that aren't in known_file_ids."""
-    if not config.drive:
-        return []
+def _list_all_images(service, folder_id: str, folder_path: list[str] | None = None) -> list[dict]:
+    """Recursively list all image files, tracking folder path for metadata."""
+    if folder_path is None:
+        folder_path = []
 
-    service = _drive_service()
-    folder_id = config.drive.asset_folder_id
+    images = []
 
     results = service.files().list(
         q=f"'{folder_id}' in parents and trashed=false",
-        fields="files(id, name, mimeType, createdTime)",
-        orderBy="createdTime desc",
-        pageSize=50,
+        fields="files(id, name, mimeType, size)",
+        pageSize=100,
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
     ).execute()
 
-    files = results.get("files", [])
-    return [
-        f for f in files
-        if f["id"] not in known_file_ids
-        and f.get("mimeType") in SUPPORTED_MIME_TYPES
-    ]
+    for f in results.get("files", []):
+        if f["mimeType"] == "application/vnd.google-apps.folder":
+            name_lower = f["name"].lower()
+            if any(kw in name_lower for kw in SKIP_FOLDER_KEYWORDS):
+                logger.info(f"Skipping restricted folder: {f['name']}")
+                continue
+            images.extend(_list_all_images(service, f["id"], folder_path + [f["name"]]))
+        elif f.get("mimeType") in SUPPORTED_MIME_TYPES:
+            f["_folder_path"] = folder_path  # attach path to file dict
+            images.append(f)
+
+    return images
 
 
-def download_file(file_id: str, filename: str, client_id: str) -> str:
-    """Download a Drive file to local assets directory. Returns local path."""
+def _extract_metadata(folder_path: list[str]) -> dict:
+    """Derive structured metadata from the Drive folder path.
+
+    Expected structures:
+      [category]                          → Houses/Commercial/Employees
+      [category, project]                 → Houses/Harvard Oaks
+      [category, project, photo_type]     → Houses/Harvard Oaks/Twilight Aerials
+    """
+    meta: dict = {}
+    if not folder_path:
+        return meta
+
+    meta["folder_path"] = "/".join(folder_path)
+
+    # First segment = category
+    if len(folder_path) >= 1:
+        meta["category"] = folder_path[0]
+
+    # Second segment = project / subdivision / business name
+    if len(folder_path) >= 2:
+        meta["project"] = folder_path[1]
+
+    # Third segment = photo type (Aerial, Twilight, Interior, MLS Size, etc.)
+    if len(folder_path) >= 3:
+        meta["photo_type"] = folder_path[2]
+
+    return meta
+
+
+def _resize_image(image_bytes: bytes, mime_type: str) -> tuple[bytes, str]:
+    """Resize image to MAX_IMAGE_DIMENSION on longest edge. Returns (bytes, mime_type)."""
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(image_bytes))
+
+    # Convert RGBA/P to RGB for JPEG output
+    if img.mode in ("RGBA", "P", "LA"):
+        img = img.convert("RGB")
+        mime_type = "image/jpeg"
+
+    w, h = img.size
+    if max(w, h) > MAX_IMAGE_DIMENSION:
+        if w >= h:
+            new_w = MAX_IMAGE_DIMENSION
+            new_h = int(h * MAX_IMAGE_DIMENSION / w)
+        else:
+            new_h = MAX_IMAGE_DIMENSION
+            new_w = int(w * MAX_IMAGE_DIMENSION / h)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+
+    out = io.BytesIO()
+    fmt = "JPEG" if mime_type in ("image/jpeg", "image/jpg") else "PNG" if mime_type == "image/png" else "WEBP"
+    if fmt == "JPEG":
+        img.save(out, format="JPEG", quality=88, optimize=True)
+    else:
+        img.save(out, format=fmt, optimize=True)
+
+    return out.getvalue(), mime_type
+
+
+def get_file_bytes(file_id: str) -> tuple[bytes, str]:
+    """Download a Drive file's bytes on demand. Returns (bytes, mime_type)."""
+    from googleapiclient.http import MediaIoBaseDownload
+
     service = _drive_service()
+    meta = service.files().get(
+        fileId=file_id,
+        fields="mimeType",
+        supportsAllDrives=True,
+    ).execute()
+    mime_type = meta.get("mimeType", "image/jpeg")
 
-    dest_dir = ASSETS_DIR / client_id
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest_path = dest_dir / filename
+    request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
+    buf = io.BytesIO()
+    downloader = MediaIoBaseDownload(buf, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
 
-    request = service.files().get_media(fileId=file_id)
-    with open(dest_path, "wb") as f:
-        downloader = MediaIoBaseDownload(f, request)
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
-
-    return str(dest_path)
+    return buf.getvalue(), mime_type
 
 
-def check_for_new_assets(config: ClientConfig, known_file_ids: set[str]) -> list[dict]:
+def _fetch_and_upload(
+    file_info: dict,
+    client_id_str: str,
+) -> dict | None:
+    """Worker: download from Drive, resize, upload to R2. Returns result dict or None on error."""
+    from core.storage import upload_bytes
+
+    file_id = file_info["id"]
+    filename = file_info["name"]
+    folder_path = file_info.get("_folder_path", [])
+    meta = _extract_metadata(folder_path)
+
+    try:
+        # Each worker creates its own Drive service (not thread-safe to share)
+        image_bytes, mime_type = get_file_bytes(file_id)
+        resized_bytes, mime_type = _resize_image(image_bytes, mime_type)
+        key = f"{client_id_str}/{filename}"
+        url = upload_bytes(resized_bytes, key, mime_type)
+
+        project = meta.get("project", "")
+        logger.info(f"[{client_id_str}] Imported: {filename}{f' ({project})' if project else ''}")
+
+        return {
+            "filename": filename,
+            "url": url,
+            "mime_type": mime_type,
+            "size": len(resized_bytes),
+            "meta": meta if meta else None,
+        }
+    except Exception as e:
+        logger.error(f"[{client_id_str}] Failed to import '{filename}': {e}")
+        return None
+
+
+def sync_drive_to_media_library(config: ClientConfig, db_client_id: int, db) -> int:
     """
-    Check Drive folder for new images. Downloads them locally.
-    Returns list of {drive_file_id, filename, local_path} for each new file.
+    Sync Drive images into the MediaItem table, resizing to 1080px and uploading to R2.
+    Uses a thread pool for parallel downloads/uploads.
+    Returns the number of newly imported images.
     """
-    new_files = list_new_files(config, known_file_ids)
-    results = []
+    from portal.api.models import MediaItem
 
-    for f in new_files:
+    if not config.drive or not config.drive.asset_folder_id:
+        logger.debug(f"[{config.client_id}] No Drive folder configured — skipping sync")
+        return 0
+
+    if not settings.GOOGLE_SERVICE_ACCOUNT_FILE:
+        logger.warning(f"[{config.client_id}] No service account file configured")
+        return 0
+
+    if not Path(settings.GOOGLE_SERVICE_ACCOUNT_FILE).exists():
+        logger.warning(f"[{config.client_id}] Service account file not found")
+        return 0
+
+    folder_id = config.drive.asset_folder_id
+
+    try:
+        service = _drive_service()
+        drive_files = _list_all_images(service, folder_id)
+    except Exception as e:
+        logger.error(f"[{config.client_id}] Failed to list Drive folder: {e}")
+        return 0
+
+    logger.info(f"[{config.client_id}] Drive scan found {len(drive_files)} image(s)")
+
+    # Build sets for deduplication — check both drive:// proxy and R2 https:// filenames
+    existing_rows = db.query(MediaItem.url, MediaItem.filename, MediaItem.meta).filter(
+        MediaItem.client_id == db_client_id
+    ).all()
+    existing_urls = {row.url for row in existing_rows}
+    existing_filenames = {row.filename for row in existing_rows}
+    filename_to_meta = {row.filename: row.meta for row in existing_rows}
+
+    from core.storage import r2_configured
+    use_r2 = r2_configured()
+    if not use_r2:
+        logger.warning(f"[{config.client_id}] R2 not configured — falling back to drive:// proxy mode (no parallelism)")
+        return _sync_proxy_mode(config, db_client_id, db, drive_files, existing_urls, existing_filenames)
+
+    logger.info(f"[{config.client_id}] R2 configured — uploading with {UPLOAD_WORKERS} parallel workers (resize to {MAX_IMAGE_DIMENSION}px)")
+
+    # Separate files into: needs import vs needs metadata backfill vs skip
+    to_import = []
+    to_backfill = []
+
+    for f in drive_files:
+        filename = f["name"]
+        drive_url = f"drive://{f['id']}"
+        folder_path = f.get("_folder_path", [])
+        meta = _extract_metadata(folder_path)
+
+        if drive_url in existing_urls or filename in existing_filenames:
+            # Already imported — backfill metadata if missing
+            if filename in filename_to_meta and filename_to_meta[filename] is None and meta:
+                to_backfill.append((filename, meta))
+        else:
+            to_import.append(f)
+
+    logger.info(f"[{config.client_id}] {len(to_import)} to import, {len(to_backfill)} to backfill metadata, {len(drive_files) - len(to_import) - len(to_backfill)} already up to date")
+
+    # Backfill metadata for existing items (sequential, fast)
+    meta_updated = 0
+    for filename, meta in to_backfill:
         try:
-            local_path = download_file(f["id"], f["name"], config.client_id)
-            results.append({
-                "drive_file_id": f["id"],
-                "filename": f["name"],
-                "local_path": local_path,
-            })
+            existing_item = db.query(MediaItem).filter(
+                MediaItem.client_id == db_client_id,
+                MediaItem.filename == filename,
+            ).first()
+            if existing_item and existing_item.meta is None:
+                existing_item.meta = meta
+                db.commit()
+                meta_updated += 1
         except Exception as e:
-            print(f"[drive_watcher] Failed to download {f['name']}: {e}")
+            logger.warning(f"[{config.client_id}] Could not backfill meta for '{filename}': {e}")
+            db.rollback()
 
-    return results
+    if meta_updated:
+        logger.info(f"[{config.client_id}] Backfilled metadata on {meta_updated} existing item(s)")
+
+    # Parallel upload
+    new_count = 0
+    db_lock = threading.Lock()
+
+    with ThreadPoolExecutor(max_workers=UPLOAD_WORKERS) as executor:
+        futures = {
+            executor.submit(_fetch_and_upload, f, config.client_id): f
+            for f in to_import
+        }
+        for future in as_completed(futures):
+            result = future.result()
+            if result is None:
+                continue
+            # DB insert on main thread under lock
+            with db_lock:
+                try:
+                    item = MediaItem(
+                        client_id=db_client_id,
+                        filename=result["filename"],
+                        url=result["url"],
+                        mime_type=result["mime_type"],
+                        size=result["size"],
+                        meta=result["meta"],
+                    )
+                    db.add(item)
+                    db.commit()
+                    new_count += 1
+                except Exception as e:
+                    logger.error(f"[{config.client_id}] DB insert failed for '{result['filename']}': {e}")
+                    db.rollback()
+
+    logger.info(f"[{config.client_id}] Imported {new_count} new Drive photo(s)")
+    return new_count
+
+
+def _sync_proxy_mode(
+    config: ClientConfig,
+    db_client_id: int,
+    db,
+    drive_files: list[dict],
+    existing_urls: set,
+    existing_filenames: set,
+) -> int:
+    """Fallback: store drive:// URLs without uploading (no R2)."""
+    from portal.api.models import MediaItem
+
+    new_count = 0
+    for f in drive_files:
+        file_id = f["id"]
+        drive_url = f"drive://{file_id}"
+        filename = f["name"]
+        folder_path = f.get("_folder_path", [])
+        meta = _extract_metadata(folder_path)
+
+        if drive_url in existing_urls or filename in existing_filenames:
+            continue
+
+        try:
+            item = MediaItem(
+                client_id=db_client_id,
+                filename=filename,
+                url=drive_url,
+                mime_type=f.get("mimeType", "image/jpeg"),
+                size=int(f.get("size", 0)),
+                meta=meta if meta else None,
+            )
+            db.add(item)
+            db.commit()
+            new_count += 1
+            logger.info(f"[{config.client_id}] Imported (proxy): {filename}")
+        except Exception as e:
+            logger.error(f"[{config.client_id}] Failed to import '{filename}': {e}")
+            db.rollback()
+
+    logger.info(f"[{config.client_id}] Imported {new_count} new Drive photo(s) (proxy mode)")
+    return new_count

@@ -6,13 +6,22 @@
   "location": {
     "city": "Boise",
     "state": "ID",
-    "lat": 43.6150,
+    "lat": 43.615,
     "lng": -116.2023
   },
   "social": {
-    "instagram": { "account_id": "", "access_token": "" },
-    "facebook": { "page_id": "", "access_token": "" },
-    "linkedin": { "company_id": "", "access_token": "" }
+    "instagram": {
+      "account_id": "",
+      "access_token": ""
+    },
+    "facebook": {
+      "page_id": "",
+      "access_token": ""
+    },
+    "linkedin": {
+      "company_id": "",
+      "access_token": ""
+    }
   },
   "publer": {
     "workspace_id": "",
@@ -28,29 +37,29 @@
     "account_id": "",
     "google_credentials_file": "clients/moorhouse_homes/google_creds.json"
   },
-  "webflow": {
-    "site_id": "",
-    "blog_collection_id": "",
-    "api_token": ""
+  "local_falcon": {
+    "api_key": "d487298f262f8f4db44501288f06e97c",
+    "place_id": "ChIJt-QxDiNTrlQRF-2nZ4H8elo"
   },
-  "drive": {
-    "asset_folder_id": ""
-  },
-  "dataforseo": {
-    "serp_keywords": ["home builder boise", "new homes boise idaho", "custom homes boise"],
-    "grid_radius_km": 20,
-    "grid_points": 25
-  },
-  "directories_to_monitor": ["google", "yelp", "bbb", "yellowpages", "bing"],
   "schedule": {
     "social_posts_per_month": 12,
     "blog_posts_per_month": 1,
     "gbp_posts_per_month": 4,
     "gbp_image_uploads_per_week": 1,
     "report_day_of_month": 1,
+    "serp_check_day_of_month": 1,
     "review_check_interval_hours": 24,
-    "directory_check_day_of_month": 15,
-    "serp_check_day_of_month": 1
+    "directory_check_day_of_month": 15
+  },
+  "directories_to_monitor": [
+    "google",
+    "yelp",
+    "bbb",
+    "yellowpages",
+    "bing"
+  ],
+  "drive": {
+    "asset_folder_id": "1vfo6sd1rhvA1yY8qktu2EdbLq5SUBH9w"
   },
   "notifications": {
     "client_email": "client@moorhousehomes.com",
