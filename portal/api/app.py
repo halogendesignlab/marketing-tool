@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .settings import get_settings
-from .routes import auth, clients, content, approvals, assets, reports, reviews, directories, media, users
+from .routes import auth, clients, content, approvals, assets, reports, reviews, directories, media, users, files
 from .database import engine, Base
 
 logger = logging.getLogger(__name__)
@@ -107,6 +107,7 @@ def create_app() -> FastAPI:
     app.include_router(directories.router, prefix="/api/directories", tags=["directories"])
     app.include_router(media.router, prefix="/api/media", tags=["media"])
     app.include_router(users.router, prefix="/api/users", tags=["users"])
+    app.include_router(files.router, prefix="/api/files", tags=["files"])
 
     # Serve uploaded images publicly so Publer can download them
     uploads_dir = Path(__file__).parent.parent.parent / "uploads"

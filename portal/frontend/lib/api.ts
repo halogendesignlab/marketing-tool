@@ -352,3 +352,30 @@ export async function updateUser(
   const res = await api.put(`/api/users/${id}`, data);
   return res.data;
 }
+
+// ── Client Files ──────────────────────────────────────────────────────────────
+
+export async function getFiles(clientId: number): Promise<any[]> {
+  const res = await api.get("/api/files/", { params: { client_id: clientId } });
+  return res.data;
+}
+
+export async function uploadFile(clientId: number, file: File, description?: string): Promise<any> {
+  const form = new FormData();
+  form.append("file", file);
+  const params: Record<string, string | number> = { client_id: clientId };
+  if (description) params.description = description;
+  const res = await api.post("/api/files/upload", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    params,
+  });
+  return res.data;
+}
+
+export async function deleteFile(fileId: number): Promise<void> {
+  await api.delete(`/api/files/${fileId}`);
+}
+
+export function getFileDownloadUrl(fileId: number): string {
+  return `${API_BASE}/api/files/${fileId}/download`;
+}

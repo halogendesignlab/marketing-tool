@@ -10,11 +10,13 @@ const adminNavItems = [
   { href: "/dashboard", label: "dashboard" },
   { href: "/approvals", label: "drafts" },
   { href: "/media", label: "media" },
+  { href: "/files", label: "files" },
   { href: "/reports", label: "reports" },
 ];
 
 const clientNavItems = [
   { href: "/approvals", label: "approvals" },
+  { href: "/files", label: "files" },
   { href: "/reports", label: "reports" },
 ];
 

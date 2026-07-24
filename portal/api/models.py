@@ -6,6 +6,7 @@ from sqlalchemy import (
     Boolean, Column, DateTime, Enum, ForeignKey, Integer,
     String, Table, Text, Float, JSON
 )
+from sqlalchemy.sql import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -273,3 +274,17 @@ class SerpResult(Base):
     period_year: Mapped[int] = mapped_column(Integer, nullable=False)
     period_month: Mapped[int] = mapped_column(Integer, nullable=False)
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ClientFile(Base):
+    __tablename__ = "client_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    filename = Column(String, nullable=False)          # original filename shown to client
+    stored_name = Column(String, nullable=False)       # UUID filename on disk
+    mime_type = Column(String, nullable=False, default="application/octet-stream")
+    size = Column(Integer, nullable=False, default=0)  # bytes
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

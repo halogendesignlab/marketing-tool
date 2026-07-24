@@ -327,3 +327,18 @@ class MediaItemResponse(BaseModel):
 
 class MoveItemRequest(BaseModel):
     folder_id: Optional[int] = None
+
+
+# ── Client Files ──────────────────────────────────────────────────────────────
+
+class ClientFileResponse(BaseModel):
+    id: int
+    client_id: int
+    filename: str
+    mime_type: str
+    size: int
+    description: str | None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
