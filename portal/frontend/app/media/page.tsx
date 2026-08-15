@@ -396,7 +396,7 @@ export default function MediaPage() {
               placeholder="Search by name or project…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="bg-ink-700 border border-ink-600 rounded-md px-3 py-1.5 text-sm text-fg-1 placeholder-fg-3 focus:outline-none focus:border-tint transition-colors duration-150 w-56 font-mono"
+              className="bg-ink-700 border border-ink-600 rounded-md px-3 py-1.5 text-sm text-fg-1 placeholder-fg-3 focus:outline-none focus:border-tint transition-colors duration-150 w-56"
             />
             {availableFilters.categories.length > 0 && (
               <select
@@ -566,7 +566,7 @@ function MediaCard({
               )}
             </div>
           )}
-          <p className="text-white/70 text-[10px] font-mono truncate drop-shadow">{item.filename}</p>
+          <p className="text-white/70 text-[10px] truncate drop-shadow">{item.filename}</p>
         </div>
       </div>
 

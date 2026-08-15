@@ -1,13 +1,18 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { ClientProvider } from "@/lib/client-context";
 import { Toaster } from "react-hot-toast";
 
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+});
+
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
+  weight: ["500", "600", "700"],
   variable: "--font-space-grotesk",
 });
 
@@ -24,8 +29,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
-      <body className="font-mono">
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
+      <body className="font-sans antialiased">
         <AuthProvider>
           <ClientProvider>
             {children}
@@ -33,10 +38,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               position="top-right"
               toastOptions={{
                 style: {
-                  background: "#161922",
-                  color: "#F4F5F7",
-                  border: "1px solid #1E2230",
-                  fontFamily: "var(--font-space-grotesk), sans-serif",
+                  background: "#FFFFFF",
+                  color: "#0E1014",
+                  border: "1px solid #E4E7EC",
+                  boxShadow: "0 12px 24px -6px rgba(16, 24, 40, 0.12)",
+                  fontFamily: "var(--font-inter), Inter, sans-serif",
+                  fontSize: "14px",
                 },
               }}
             />

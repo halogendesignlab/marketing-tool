@@ -475,7 +475,7 @@ function SearchPerformance({ gsc }: { gsc: GscData }) {
               <tbody className="divide-y divide-ink-600">
                 {gsc.top_queries.map((row, i) => (
                   <tr key={i} className="hover:bg-ink-600/30 transition-colors duration-150">
-                    <td className="px-6 py-3 text-fg-2 font-mono text-sm max-w-xs">
+                    <td className="px-6 py-3 text-fg-2 text-sm max-w-xs">
                       <span className="truncate block">{row.query}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -519,7 +519,7 @@ function SearchPerformance({ gsc }: { gsc: GscData }) {
                   return (
                     <tr key={i} className="hover:bg-ink-600/30 transition-colors duration-150">
                       <td className="px-6 py-3 text-fg-2 max-w-xs">
-                        <span className="truncate block font-mono text-xs">{path}</span>
+                        <span className="truncate block text-xs">{path}</span>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <span className={`inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-sans font-medium ${positionBadge(row.position)}`}>

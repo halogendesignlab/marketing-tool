@@ -1,39 +1,71 @@
-@import url("https://fonts.googleapis.com/css2?family=New+Science:wght@500;600&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
-  background: #07080B;
-  color: #F4F5F7;
-  font-family: "JetBrains Mono", monospace;
+  background: #f7f8fa;
+  color: #0e1014;
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  letter-spacing: -0.02em;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+
+  .numeric {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @layer components {
   .input {
-    @apply w-full bg-ink-700 border border-ink-600 rounded-md px-3 py-2 text-sm text-fg-1 placeholder-fg-3 focus:outline-none focus:border-tint transition-colors duration-150;
+    @apply w-full bg-white border border-ink-600 rounded-lg px-3 py-2 text-sm text-fg-1 placeholder-fg-3 shadow-sm focus:outline-none focus:border-tint focus:ring-2 focus:ring-tint/15 transition duration-150;
   }
 
   .btn-primary {
-    @apply bg-tint text-ink-900 font-sans font-semibold text-sm px-4 py-2 rounded-md hover:bg-tint-hot transition-colors duration-150;
+    @apply bg-tint text-white font-sans font-medium text-sm px-4 py-2 rounded-lg shadow-sm hover:bg-tint-hot active:translate-y-px transition duration-150;
   }
 
   .btn-ghost {
-    @apply border border-ink-600 text-fg-2 font-sans text-sm px-4 py-2 rounded-md hover:border-tint hover:text-fg-1 transition-colors duration-150;
+    @apply bg-white border border-ink-600 text-fg-2 font-sans font-medium text-sm px-4 py-2 rounded-lg shadow-sm hover:bg-ink-900 hover:text-fg-1 active:translate-y-px transition duration-150;
   }
 
   .card {
-    @apply bg-ink-700 border border-ink-600 rounded-xl p-5;
+    @apply bg-white border border-ink-600 rounded-xl p-5 shadow-card;
   }
+}
+
+::selection {
+  background: #d8e2dc;
+  color: #0e1014;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d0d5dd;
+  border-radius: 999px;
+  border: 2px solid #f7f8fa;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #b6bcc7;
 }

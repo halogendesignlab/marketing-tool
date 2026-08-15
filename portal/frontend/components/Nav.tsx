@@ -7,22 +7,22 @@ import { useAuth } from "@/lib/auth-context";
 import { useClient } from "@/lib/client-context";
 
 const adminNavItems = [
-  { href: "/dashboard", label: "dashboard" },
-  { href: "/approvals", label: "drafts" },
-  { href: "/media", label: "media" },
-  { href: "/files", label: "files" },
-  { href: "/reports", label: "reports" },
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/approvals", label: "Drafts" },
+  { href: "/media", label: "Media" },
+  { href: "/files", label: "Files" },
+  { href: "/reports", label: "Reports" },
 ];
 
 const clientNavItems = [
-  { href: "/approvals", label: "approvals" },
-  { href: "/files", label: "files" },
-  { href: "/reports", label: "reports" },
+  { href: "/approvals", label: "Approvals" },
+  { href: "/files", label: "Files" },
+  { href: "/reports", label: "Reports" },
 ];
 
 const adminItems = [
-  { href: "/admin/clients", label: "clients" },
-  { href: "/admin/users", label: "users" },
+  { href: "/admin/clients", label: "Clients" },
+  { href: "/admin/users", label: "Users" },
 ];
 
 export default function Nav() {
@@ -37,9 +37,9 @@ export default function Nav() {
   }
 
   return (
-    <nav className="bg-ink-800 border-b border-ink-600 px-6 py-3 flex items-center justify-between">
+    <nav className="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-ink-600 px-6 py-3 flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <span className="font-sans font-bold text-fg-1 text-sm tracking-widest">HALOGEN</span>
+        <span className="font-display font-bold text-fg-1 text-sm tracking-[0.18em]">HALOGEN</span>
 
         {/* Client context indicator */}
         {selectedClient && (
@@ -75,10 +75,10 @@ export default function Nav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`px-3 py-1.5 rounded-md font-sans text-sm transition-colors duration-150 ${
+              className={`px-3 py-1.5 rounded-lg font-sans font-medium text-sm transition-colors duration-150 ${
                 pathname.startsWith(item.href)
-                  ? "bg-ink-600 text-fg-1"
-                  : "text-fg-2 hover:text-fg-1"
+                  ? "bg-ink-500 text-fg-1 shadow-sm ring-1 ring-ink-600"
+                  : "text-fg-2 hover:text-fg-1 hover:bg-ink-500"
               }`}
             >
               {item.label}
@@ -91,10 +91,10 @@ export default function Nav() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`px-3 py-1.5 rounded-md font-sans text-sm transition-colors duration-150 ${
+                  className={`px-3 py-1.5 rounded-lg font-sans font-medium text-sm transition-colors duration-150 ${
                     pathname.startsWith(item.href)
-                      ? "bg-ink-600 text-fg-1"
-                      : "text-fg-2 hover:text-fg-1"
+                      ? "bg-ink-500 text-fg-1 shadow-sm ring-1 ring-ink-600"
+                      : "text-fg-2 hover:text-fg-1 hover:bg-ink-500"
                   }`}
                 >
                   {item.label}
@@ -107,7 +107,7 @@ export default function Nav() {
 
       <div className="flex items-center gap-3">
         {isAdmin && (
-          <span className="text-xs bg-tint text-ink-900 px-2 py-0.5 rounded font-sans font-semibold">Admin</span>
+          <span className="text-xs bg-tint text-ink-900 px-2 py-0.5 rounded-md font-sans font-semibold tracking-wide">Admin</span>
         )}
         <Link
           href="/profile"
@@ -120,7 +120,7 @@ export default function Nav() {
           onClick={logout}
           className="text-sm text-fg-3 hover:text-fg-1 font-sans transition-colors duration-150"
         >
-          sign out
+          Sign out
         </button>
       </div>
     </nav>

@@ -521,12 +521,12 @@ function DraftCard({ item, isAdmin, clientId, onApprove, onApproveScheduled, onR
             {item.title && <p className="font-sans font-medium text-fg-1 text-sm mb-1.5 truncate">{item.title}</p>}
             {editing ? (
               <textarea value={editBody} onChange={(e) => setEditBody(e.target.value)}
-                className="input min-h-[140px] resize-y font-mono" />
+                className="input min-h-[140px] resize-y" />
             ) : item.content_type === "blog_post" ? (
               <div className="text-sm text-fg-2 leading-relaxed line-clamp-6 prose prose-invert prose-sm max-w-none prose-headings:font-sans prose-headings:font-semibold prose-headings:text-fg-1 prose-p:my-1"
                 dangerouslySetInnerHTML={{ __html: item.body }} />
             ) : (
-              <p className="text-sm text-fg-2 leading-relaxed line-clamp-4 whitespace-pre-wrap font-mono">{item.body}</p>
+              <p className="text-sm text-fg-2 leading-relaxed line-clamp-4 whitespace-pre-wrap">{item.body}</p>
             )}
           </div>
         </div>

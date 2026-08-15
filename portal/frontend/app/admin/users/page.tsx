@@ -430,7 +430,7 @@ function UserTable({
               className={`${i > 0 ? "border-t border-ink-600" : ""} hover:bg-ink-600/30 transition-colors duration-150`}
             >
               <td className="px-5 py-3 font-sans font-medium text-fg-1">{u.name}</td>
-              <td className="px-5 py-3 font-mono text-sm text-fg-3">{u.email}</td>
+              <td className="px-5 py-3 text-sm text-fg-3">{u.email}</td>
               <td className="px-5 py-3">
                 <span
                   className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-sans font-medium border ${
@@ -460,7 +460,7 @@ function UserTable({
                   <span className="text-fg-3 font-sans">—</span>
                 )}
               </td>
-              <td className="px-5 py-3 text-fg-3 font-mono text-xs">
+              <td className="px-5 py-3 text-fg-3 text-xs">
                 {u.last_login ? new Date(u.last_login).toLocaleDateString() : "Never"}
               </td>
               <td className="px-5 py-3">

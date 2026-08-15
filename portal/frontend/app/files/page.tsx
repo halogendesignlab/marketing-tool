@@ -81,7 +81,7 @@ function FileRow({
       <FileIcon mimeType={file.mime_type} />
 
       <div className="flex-1 min-w-0">
-        <p className="text-fg-1 font-mono text-sm truncate">{file.filename}</p>
+        <p className="text-fg-1 text-sm truncate">{file.filename}</p>
         {file.description && (
           <p className="text-fg-3 font-sans text-xs mt-0.5 truncate">{file.description}</p>
         )}
@@ -258,7 +258,7 @@ export default function FilesPage() {
                 <div className="space-y-1">
                   {pendingFiles.map((f, i) => (
                     <div key={i} className="flex items-center justify-between gap-2">
-                      <span className="text-fg-2 font-mono text-sm truncate">{f.name}</span>
+                      <span className="text-fg-2 text-sm truncate">{f.name}</span>
                       <div className="flex items-center gap-3 shrink-0">
                         <span className="text-fg-3 font-sans text-xs">{formatBytes(f.size)}</span>
                         <button

@@ -26,19 +26,31 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-ink-900 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-ink-900 flex items-center justify-center px-4 relative overflow-hidden">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-70"
+        style={{
+          background:
+            "radial-gradient(60rem 40rem at 50% -10%, #E9EFEB 0%, rgba(247,248,250,0) 70%)",
+        }}
+      />
+      <div className="w-full max-w-md relative">
         <div className="text-center mb-8">
-          <h1 className="font-display text-3xl font-semibold text-fg-1 tracking-tight">Halogen Marketing Portal</h1>
-          <p className="text-fg-3 text-sm font-sans mt-1">Sign in to your account</p>
+          <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-tint text-white font-display font-bold text-lg shadow-lift mb-5">
+            H
+          </div>
+          <h1 className="font-display text-[32px] leading-tight font-semibold text-fg-1 tracking-tight">
+            Welcome back
+          </h1>
+          <p className="text-fg-2 text-sm mt-2">Sign in to the Halogen marketing portal</p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="bg-ink-800 border border-ink-600 rounded-xl p-8 space-y-5"
+          className="bg-white border border-ink-600 rounded-2xl p-8 space-y-5 shadow-pop"
         >
           <div>
-            <label className="block text-fg-2 text-sm font-sans mb-1">Email</label>
+            <label className="block text-fg-1 text-sm font-medium mb-1.5">Email</label>
             <input
               type="email"
               required
@@ -51,7 +63,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-fg-2 text-sm font-sans mb-1">Password</label>
+            <label className="block text-fg-1 text-sm font-medium mb-1.5">Password</label>
             <input
               type="password"
               required

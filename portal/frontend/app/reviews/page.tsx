@@ -141,7 +141,7 @@ export default function ReviewsPage() {
                   <p className="text-sm font-sans font-medium text-fg-1 mb-1">{review.reviewer_name}</p>
                 )}
                 {review.body && (
-                  <p className="text-sm text-fg-2 font-mono leading-relaxed mb-4">{review.body}</p>
+                  <p className="text-sm text-fg-2 leading-relaxed mb-4">{review.body}</p>
                 )}
 
                 {draft && !review.responded_at && (
@@ -154,7 +154,7 @@ export default function ReviewsPage() {
                         className="input min-h-[80px] resize-none"
                       />
                     ) : (
-                      <p className="text-sm text-fg-2 font-mono bg-ink-500 border border-ink-600 rounded-md p-3 leading-relaxed">
+                      <p className="text-sm text-fg-2 bg-ink-500 border border-ink-600 rounded-md p-3 leading-relaxed">
                         {draft.body}
                       </p>
                     )}

@@ -389,7 +389,7 @@ export default function ClientForm({ initial }: { initial?: ClientDetail }) {
                     </span>
                   </p>
                   {kwInfo.preview && kwInfo.preview.length > 0 && (
-                    <p className="text-xs text-fg-3 font-mono mt-1 leading-relaxed">
+                    <p className="text-xs text-fg-3 mt-1 leading-relaxed">
                       {kwInfo.preview.join(", ")}{(kwInfo.row_count ?? 0) > kwInfo.preview.length ? `, +${(kwInfo.row_count ?? 0) - kwInfo.preview.length} more` : ""}
                     </p>
                   )}
