@@ -23,6 +23,10 @@ router = APIRouter()
 # Days a client has to review a blog post before it publishes on its own.
 BLOG_REVIEW_WINDOW_DAYS = 7
 
+# How many photos a blog draft carries. One, so the post has a lead image and
+# nothing else competing with the text.
+BLOG_IMAGE_COUNT = 1
+
 
 def _as_utc(dt: datetime | None) -> datetime | None:
     """Read a stored timestamp as UTC-aware.
@@ -168,17 +172,17 @@ def generate_draft(
                 if len(no_project) < 3:
                     no_project.append(m)
 
-        # Ask Claude to pick the best-matching projects
+        # Ask Claude to pick the best-matching project
         blog_media = select_blog_images(
             title=draft["title"],
             body_excerpt=draft["body"][:600],
             project_reps=project_reps,
-            count=3,
-        )
+            count=BLOG_IMAGE_COUNT,
+        )[:BLOG_IMAGE_COUNT]
 
         # Fall back to unorganised items if library has no project metadata
         if not blog_media:
-            blog_media = no_project[:3]
+            blog_media = no_project[:BLOG_IMAGE_COUNT]
 
         blog_image_urls = [m.url for m in blog_media]
         absolute_image_urls = [
@@ -716,10 +720,10 @@ def _img_block(url: str) -> str:
 def _inject_blog_images(html: str, image_urls: list[str]) -> str:
     """Insert image blocks at natural section breaks in blog HTML.
 
-    Strategy:
-      - First image: after the opening (hook) paragraph
-      - Second image: after the first <h2> section's first </p>
-      - Third image (if present): after the second <h2> section's first </p>
+    The first image goes after the opening paragraph, which is where a lead
+    image belongs. Any further images are spaced out, one after each subsequent
+    <h2> section's first paragraph — drafts currently carry a single image, but
+    the placement holds if that changes.
     """
     if not image_urls:
         return html
