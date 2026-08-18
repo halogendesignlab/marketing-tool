@@ -68,10 +68,20 @@ async def lifespan(app: FastAPI):
         from .database import SessionLocal
         _db = SessionLocal()
         try:
-            _db.execute(text(
-                "INSERT OR IGNORE INTO user_clients (user_id, client_id) "
-                "SELECT id, client_id FROM users WHERE client_id IS NOT NULL"
-            ))
+            # INSERT OR IGNORE is SQLite-only; Postgres rejects it outright, so
+            # this migration had never actually run in production.
+            if engine.dialect.name == "postgresql":
+                _sql = (
+                    "INSERT INTO user_clients (user_id, client_id) "
+                    "SELECT id, client_id FROM users WHERE client_id IS NOT NULL "
+                    "ON CONFLICT DO NOTHING"
+                )
+            else:
+                _sql = (
+                    "INSERT OR IGNORE INTO user_clients (user_id, client_id) "
+                    "SELECT id, client_id FROM users WHERE client_id IS NOT NULL"
+                )
+            _db.execute(text(_sql))
             _db.commit()
             logger.info("user_clients migration complete")
         finally:
