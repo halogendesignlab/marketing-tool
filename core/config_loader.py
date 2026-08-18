@@ -108,6 +108,10 @@ class ClientConfig(BaseModel):
     # when two brands share a library: without it, a commercial contractor draws
     # from a pool that is overwhelmingly residential. None = no restriction.
     media_category: Optional[str] = None
+    # Keywords the research turned up that this client should not write about —
+    # typically work they don't actually take on. Matched case-insensitively as a
+    # substring, so "church" blocks "church construction cost" too.
+    excluded_keywords: list[str] = []
     directories_to_monitor: list[str] = ["google", "yelp", "bbb", "yellowpages", "bing"]
     schedule: ScheduleConfig = ScheduleConfig()
     notifications: NotificationsConfig

@@ -75,5 +75,9 @@
       "name": "Moorhouse Commercial Team"
     }
   ],
-  "media_category": "Commercial"
+  "media_category": "Commercial",
+  "excluded_keywords": [
+    "church construction",
+    "restaurant construction"
+  ]
 }

@@ -121,21 +121,41 @@ def recent_blog_keywords(db, client_db_id: int, limit: int = 24) -> set[str]:
 
 
 def pick_blog_keywords(client_id: str, count: int, exclude: set[str] | None = None) -> list[str]:
-    """`count` distinct blog keywords, skipping any already used.
+    """`count` distinct blog keywords, skipping any already used or banned.
 
-    Falls back to reusing the best terms once the research runs dry — a client
-    with three usable keywords should still be able to ask for four posts.
+    Drawn at random from the strongest candidates rather than taken straight off
+    the top of the ranking. Taking the top N is deterministic, and the "already
+    used" set is read from existing drafts — so discarding a draft deletes the
+    only record that its keyword was tried, and the next run picks it again.
+    Discard, regenerate, same two topics, forever.
+
+    Falls back to reusing terms once the research runs dry — a client with three
+    usable keywords should still be able to ask for four posts.
     """
+    import random
+
+    from .config_loader import load_client_config
     from .keyword_loader import get_blog_keywords
 
     exclude = {e.lower() for e in (exclude or set())}
-    ranked = [k["keyword"] for k in get_blog_keywords(client_id, max_keywords=40)]
+
+    try:
+        banned = [b.lower() for b in (load_client_config(client_id).excluded_keywords or [])]
+    except Exception:
+        banned = []
+
+    ranked = [
+        k["keyword"] for k in get_blog_keywords(client_id, max_keywords=40)
+        if not any(b in k["keyword"].lower() for b in banned)
+    ]
 
     fresh = [k for k in ranked if k.lower() not in exclude]
     if len(fresh) >= count:
-        return fresh[:count]
+        # Sample from the better end of the list so quality holds, while leaving
+        # enough room that two consecutive runs rarely collide.
+        pool = fresh[: max(count * 4, 10)]
+        return random.sample(pool, count)
 
-    # Top up from the used ones rather than returning fewer than asked for.
     used = [k for k in ranked if k.lower() in exclude]
     return (fresh + used)[:count]
 
