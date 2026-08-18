@@ -1,7 +1,11 @@
 """publer_publisher.py — Publish content via the Publer API."""
 
+import json
+import logging
+import time
+
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from .config_loader import ClientConfig
 from portal.api.settings import get_settings
@@ -10,7 +14,13 @@ UPLOADS_DIR = Path(__file__).parent.parent / "uploads"
 
 settings = get_settings()
 
+logger = logging.getLogger(__name__)
+
 BASE_URL = "https://app.publer.com/api/v1"
+
+# Publer refuses a scheduled_at that has passed by the time it processes the job
+# — "Posts cannot be backdated" — so posting now means a moment from now.
+POST_NOW_BUFFER = timedelta(minutes=3)
 
 # Maps our platform names to Publer's networks key
 NETWORK_KEY = {
@@ -34,6 +44,40 @@ def _raise_with_body(resp) -> None:
             request=resp.request,
             response=resp,
         )
+
+
+
+def _confirm_job(job_id: str, workspace_id: str, attempts: int = 7, delay: float = 4.0) -> None:
+    """Wait for a scheduling job and raise if Publer rejected the post.
+
+    /posts/schedule returns 200 with a job id as soon as the request is accepted;
+    whether the post was actually taken is only reported by job_status. Without
+    this, a rejected post is indistinguishable from a published one — the caller
+    sees 200 and records success.
+
+    Still processing after the last attempt is not treated as failure: it usually
+    means Publer is slow, and marking it failed would be its own wrong answer.
+    """
+    for _ in range(attempts):
+        time.sleep(delay)
+        status = get_post_status(job_id, workspace_id)
+        state = status.get("status")
+
+        if state in ("complete", "completed"):
+            failures = (status.get("payload") or {}).get("failures") or {}
+            messages = [
+                f"{f.get('account_name') or f.get('account_id')}: {f.get('message')}"
+                for entries in failures.values()
+                for f in entries
+            ]
+            if messages:
+                raise RuntimeError("Publer rejected the post — " + "; ".join(messages))
+            return
+
+        if state in ("failed", "error"):
+            raise RuntimeError(f"Publer job {job_id} failed: {json.dumps(status)[:300]}")
+
+    logger.warning("Publer job %s still processing after %ss — not confirmed", job_id, attempts * delay)
 
 
 def _headers(workspace_id: str) -> dict:
@@ -117,7 +161,7 @@ def publish_social_post(
     # with {"errors":["Unknown state auto"]}, so a post approved without a date
     # never published — posting now is expressed as scheduled for this moment.
     state = "draft" if as_draft else "scheduled"
-    publish_at = scheduled_for or datetime.now(timezone.utc)
+    publish_at = scheduled_for or (datetime.now(timezone.utc) + POST_NOW_BUFFER)
 
     # Upload media once and reuse across all platforms
     media_obj = None
@@ -154,7 +198,12 @@ def publish_social_post(
             json=payload,
         )
         _raise_with_body(resp)
-        return resp.json()
+        result = resp.json()
+
+    # 200 only means queued. Confirm before the caller records a success.
+    if not as_draft and result.get("job_id"):
+        _confirm_job(result["job_id"], workspace_id)
+    return result
 
 
 def publish_gbp_post(
@@ -200,7 +249,8 @@ def upload_gbp_photo(
 
     # See publish_social_post: "auto" is not a state Publer accepts. Uploading now
     # is expressed as scheduled for this moment.
-    entry: dict = {"id": gbp_id, "scheduled_at": (scheduled_for or datetime.now(timezone.utc)).isoformat()}
+    publish_at = scheduled_for or (datetime.now(timezone.utc) + POST_NOW_BUFFER)
+    entry: dict = {"id": gbp_id, "scheduled_at": publish_at.isoformat()}
 
     payload = {
         "bulk": {
@@ -226,7 +276,11 @@ def upload_gbp_photo(
             json=payload,
         )
         _raise_with_body(resp)
-        return resp.json()
+        result = resp.json()
+
+    if result.get("job_id"):
+        _confirm_job(result["job_id"], workspace_id)
+    return result
 
 
 def get_post_status(job_id: str, workspace_id: str) -> dict:
