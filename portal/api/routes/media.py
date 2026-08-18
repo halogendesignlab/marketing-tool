@@ -143,20 +143,31 @@ def delete_folder(
 
 # ── Media items ───────────────────────────────────────────────────────────────
 
+def _meta_key(key: str):
+    """Read one key out of MediaItem.meta as text.
+
+    Goes through SQLAlchemy's JSON accessor rather than func.json_extract so the
+    dialect picks the right syntax — json_extract on SQLite locally, ->> on the
+    Postgres box in production, where json_extract does not exist at all.
+    """
+    return MediaItem.meta[key].as_string()
+
+
 def _apply_meta_filters(q, search: Optional[str], category: Optional[str], project: Optional[str], photo_type: Optional[str]):
     """Apply metadata + text search filters to a MediaItem query."""
-    from sqlalchemy import func, or_
+    from sqlalchemy import or_
     if category:
-        q = q.filter(func.json_extract(MediaItem.meta, "$.category") == category)
+        q = q.filter(_meta_key("category") == category)
     if project:
-        q = q.filter(func.json_extract(MediaItem.meta, "$.project") == project)
+        q = q.filter(_meta_key("project") == project)
     if photo_type:
-        q = q.filter(func.json_extract(MediaItem.meta, "$.photo_type") == photo_type)
+        q = q.filter(_meta_key("photo_type") == photo_type)
     if search:
         pattern = f"%{search}%"
         q = q.filter(or_(
             MediaItem.filename.ilike(pattern),
-            func.json_extract(MediaItem.meta, "$.project").ilike(pattern),
+            _meta_key("project").ilike(pattern),
+            _meta_key("category").ilike(pattern),
         ))
     return q
 
@@ -168,21 +179,21 @@ def list_filters(
     current_user: User = Depends(get_current_user),
 ):
     """Return distinct metadata filter values for a client."""
-    from sqlalchemy import func, distinct
     client_id = _client_id_for(current_user, db, client_id)
 
-    def _distinct(json_path: str) -> list[str]:
-        rows = db.query(func.json_extract(MediaItem.meta, json_path)).filter(
+    def _distinct(key: str) -> list[str]:
+        col = _meta_key(key)
+        rows = db.query(col).filter(
             MediaItem.client_id == client_id,
             MediaItem.meta.isnot(None),
-            func.json_extract(MediaItem.meta, json_path).isnot(None),
+            col.isnot(None),
         ).distinct().all()
         return sorted({r[0] for r in rows if r[0]})
 
     return {
-        "categories": _distinct("$.category"),
-        "projects": _distinct("$.project"),
-        "photo_types": _distinct("$.photo_type"),
+        "categories": _distinct("category"),
+        "projects": _distinct("project"),
+        "photo_types": _distinct("photo_type"),
     }
 
 
