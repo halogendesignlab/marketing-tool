@@ -79,6 +79,7 @@ class ContentItemResponse(BaseModel):
     image_url: Optional[str]
     scheduled_for: Optional[datetime]
     published_at: Optional[datetime]
+    auto_publish_at: Optional[datetime] = None
     rejection_reason: Optional[str] = None
     meta: Optional[dict] = None
     created_at: datetime
@@ -97,6 +98,12 @@ class RejectContentRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class UpdateContentRequest(BaseModel):
+    title: Optional[str] = None
+    body: Optional[str] = None
+    image_url: Optional[str] = None
+
+
 class GenerateDraftRequest(BaseModel):
     content_type: str          # social_caption | blog_post | gbp_post
     platform: Optional[str] = None          # legacy single-platform
@@ -104,6 +111,23 @@ class GenerateDraftRequest(BaseModel):
     media_item_id: Optional[int] = None
     topic: Optional[str] = None
     client_id: Optional[int] = None  # admin override
+
+
+class PublishedItemResponse(BaseModel):
+    id: int
+    client_id: int
+    content_type: ContentType
+    platform: Optional[Platform]
+    title: Optional[str]
+    body: str
+    image_url: Optional[str]
+    published_at: Optional[datetime]
+    approved_at: Optional[datetime]
+    meta: Optional[dict] = None
+    # "auto" when the review window closed without client action, otherwise
+    # whoever approved it. Derived — approved_by_id is NULL only for the job.
+    published_via: str
+    approved_by_name: Optional[str] = None
 
 
 # ── Assets ────────────────────────────────────────────────────────────────────

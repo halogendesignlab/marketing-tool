@@ -1,17 +1,34 @@
 """routes/approvals.py — Approve, edit, or reject content items."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import ContentItem, ContentStatus, User
+from ..models import ContentItem, ContentStatus, ContentType, User
 from ..auth import get_current_user
-from ..schemas import ContentItemResponse, ApproveContentRequest, RejectContentRequest, GenerateDraftRequest
+from ..schemas import (
+    ContentItemResponse, ApproveContentRequest, RejectContentRequest,
+    GenerateDraftRequest, PublishedItemResponse, UpdateContentRequest,
+)
 
 router = APIRouter()
+
+# Days a client has to review a blog post before it publishes on its own.
+BLOG_REVIEW_WINDOW_DAYS = 7
+
+# What a client sees in their feed. Approved/scheduled items stay listed so the
+# decision is visible and reversible right up until the item actually goes live.
+CLIENT_VISIBLE_STATUSES = (
+    ContentStatus.client_review,
+    ContentStatus.approved,
+    ContentStatus.scheduled,
+)
+
+# Statuses a client may pull back to their own review queue.
+UNDOABLE_STATUSES = (ContentStatus.approved, ContentStatus.scheduled)
 
 
 @router.post("/generate", response_model=ContentItemResponse)
@@ -22,7 +39,10 @@ def generate_draft(
 ):
     """Generate a content draft on demand and save it as pending_approval."""
     from core.config_loader import load_client_config
-    from core.content_generator import generate_captions_from_image, generate_blog_draft, generate_gbp_post
+    from core.content_generator import (
+        generate_captions_from_image, generate_blog_draft, generate_gbp_post,
+        recent_blog_titles,
+    )
     from ..models import Client, MediaItem, ContentType, Platform
 
     # Resolve client
@@ -93,7 +113,11 @@ def generate_draft(
         media_item.last_used_at = datetime.now(timezone.utc)
 
     elif req.content_type == "blog_post":
-        draft = generate_blog_draft(config, topic=req.topic or None)
+        draft = generate_blog_draft(
+            config,
+            topic=req.topic or None,
+            recent_titles=recent_blog_titles(db, client_db_id),
+        )
 
         # Select images from the media library that best match the article
         from sqlalchemy import nullsfirst
@@ -189,7 +213,8 @@ def list_pending(
 ):
     """
     Admins see all content items (filterable by status).
-    Clients see items in client_review (sent to them for approval).
+    Clients see what is with them plus what they just approved, so an approved
+    item stays on screen (and undoable) rather than vanishing until it publishes.
     """
     if current_user.role == "admin":
         query = db.query(ContentItem)
@@ -203,11 +228,55 @@ def list_pending(
     else:
         client_ids = current_user.client_ids
         query = db.query(ContentItem).filter(
-            ContentItem.status == ContentStatus.client_review,
+            ContentItem.status.in_(CLIENT_VISIBLE_STATUSES),
             ContentItem.client_id.in_(client_ids),
         )
 
     return query.order_by(ContentItem.created_at.desc()).all()
+
+
+@router.get("/published", response_model=list[PublishedItemResponse])
+def list_published(
+    client_id: Optional[int] = None,
+    limit: int = 200,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Everything that has gone live, however it got there."""
+    query = db.query(ContentItem).filter(ContentItem.status == ContentStatus.published)
+
+    if current_user.role == "admin":
+        if client_id:
+            query = query.filter(ContentItem.client_id == client_id)
+    else:
+        query = query.filter(ContentItem.client_id.in_(current_user.client_ids))
+
+    items = (
+        query.order_by(ContentItem.published_at.desc(), ContentItem.id.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+
+    results = []
+    for item in items:
+        approver = item.approved_by
+        results.append(PublishedItemResponse(
+            id=item.id,
+            client_id=item.client_id,
+            content_type=item.content_type,
+            platform=item.platform,
+            title=item.title,
+            body=item.body,
+            image_url=item.image_url,
+            published_at=item.published_at,
+            approved_at=item.approved_at,
+            meta=item.meta,
+            published_via="auto" if approver is None else approver.role.value,
+            approved_by_name=approver.name if approver else None,
+        ))
+    return results
 
 
 @router.delete("/{item_id}")
@@ -240,6 +309,32 @@ def recall_item(
     if item.status != ContentStatus.client_review:
         raise HTTPException(status_code=400, detail="Item is not in client review")
     item.status = ContentStatus.pending_approval
+    item.auto_publish_at = None
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.post("/{item_id}/undo-approval", response_model=ContentItemResponse)
+def undo_approval(
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Pull an approved item back into review. Only works before it publishes."""
+    item = _get_item(item_id, current_user, db)
+    if item.status not in UNDOABLE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This item has already published"
+            if item.status == ContentStatus.published
+            else f"Item cannot be undone (current status: {item.status.value})",
+        )
+
+    item.status = ContentStatus.client_review
+    item.approved_by_id = None
+    item.approved_at = None
+    item.scheduled_for = None
     db.commit()
     db.refresh(item)
     return item
@@ -265,6 +360,44 @@ def send_to_client(
         )
     item.status = ContentStatus.client_review
     item.rejection_reason = None  # clear any previous rejection note
+    if item.content_type == ContentType.blog_post:
+        item.auto_publish_at = datetime.now(timezone.utc) + timedelta(days=BLOG_REVIEW_WINDOW_DAYS)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.patch("/{item_id}", response_model=ContentItemResponse)
+def update_item(
+    item_id: int,
+    payload: UpdateContentRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Save edits without deciding on the item. Does not touch the review clock."""
+    item = _get_item(item_id, current_user, db)
+
+    # Clients may only edit while the item is actually with them.
+    if current_user.role != "admin" and item.status != ContentStatus.client_review:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This item is no longer open for edits",
+        )
+    if current_user.role == "admin" and item.status in {
+        ContentStatus.published, ContentStatus.scheduled
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot edit an item that is {item.status.value}",
+        )
+
+    if payload.title is not None:
+        item.title = payload.title
+    if payload.body is not None:
+        item.body = payload.body
+    if payload.image_url is not None:
+        item.image_url = payload.image_url or None
+
     db.commit()
     db.refresh(item)
     return item
@@ -297,6 +430,8 @@ def approve_item(
     item.status = ContentStatus.approved
     item.approved_by_id = current_user.id
     item.approved_at = datetime.now(timezone.utc)
+    # auto_publish_at is left intact so undoing restores the original deadline
+    # rather than granting a fresh window. The auto-publish job is status-gated.
     db.commit()
     db.refresh(item)
 
@@ -410,6 +545,7 @@ def reject_item(
 
     item.status = ContentStatus.rejected
     item.rejection_reason = payload.reason
+    item.auto_publish_at = None
     db.commit()
     db.refresh(item)
     return item
