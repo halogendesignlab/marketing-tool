@@ -7,8 +7,8 @@ from apscheduler.triggers.cron import CronTrigger
 from core.config_loader import load_all_clients, ClientConfig
 from core.content_generator import (
     generate_blog_draft,
-    generate_gbp_post,
     generate_captions_from_image,
+    recent_blog_titles,
 )
 from core.email_notifier import send_content_ready
 from portal.api.database import SessionLocal
@@ -32,17 +32,14 @@ def generate_social_captions_job(client_id: str):
     try:
         db_client_id = _get_db_client_id(db, client_id)
 
-        # Pick least-recently-used media item (null last_used_at = never used, comes first)
-        from sqlalchemy import nullsfirst
-        media_item = (
-            db.query(MediaItem)
-            .filter(MediaItem.client_id == db_client_id)
-            .order_by(nullsfirst(MediaItem.last_used_at.asc()))
-            .first()
-        )
+        media_item = _next_photo(db, config, db_client_id)
 
         if not media_item:
-            logger.warning(f"[{client_id}] No media items in library — skipping weekly captions")
+            logger.warning(
+                f"[{client_id}] No media items in library"
+                + (f" for category '{config.media_category}'" if config.media_category else "")
+                + " — skipping weekly captions"
+            )
             return
 
         captions = generate_captions_from_image(
@@ -99,9 +96,13 @@ def generate_blog_draft_job(client_id: str):
     db = SessionLocal()
 
     try:
-        draft = generate_blog_draft(config)
+        db_client_id = _get_db_client_id(db, client_id)
+        draft = generate_blog_draft(
+            config,
+            recent_titles=recent_blog_titles(db, db_client_id),
+        )
         item = ContentItem(
-            client_id=_get_db_client_id(db, client_id),
+            client_id=db_client_id,
             content_type=ContentType.blog_post,
             status=ContentStatus.pending_approval,
             title=draft["title"],
@@ -124,37 +125,39 @@ def generate_blog_draft_job(client_id: str):
         db.close()
 
 
-def generate_gbp_post_job(client_id: str):
-    """Generate a GBP post and queue for approval."""
-    from core.config_loader import load_client_config
-    config = load_client_config(client_id)
+# A standalone weekly GBP post job used to live here. It was removed: the weekly
+# caption job already writes a GBP caption for the photo it selects, so the two
+# produced a duplicate GBP update every Monday — and this one had no photo, no
+# keyword context and no memory of previous posts. Admins can still generate a
+# one-off GBP post from the portal, which calls generate_gbp_post directly.
+
+
+def auto_publish_expired_reviews_job(client_id: str):
+    """Approve client_review items whose review window has closed."""
+    from datetime import datetime, timezone
+
     db = SessionLocal()
-
+    now = datetime.now(timezone.utc)
     try:
-        post = generate_gbp_post(config)
-        item = ContentItem(
-            client_id=_get_db_client_id(db, client_id),
-            content_type=ContentType.gbp_post,
-            platform=Platform.gbp,
-            status=ContentStatus.pending_approval,
-            body=post,
-        )
-        db.add(item)
-        db.commit()
-        logger.info(f"[{client_id}] Generated GBP post")
+        db_client_id = _get_db_client_id(db, client_id)
+        items = db.query(ContentItem).filter(
+            ContentItem.client_id == db_client_id,
+            ContentItem.status == ContentStatus.client_review,
+            ContentItem.auto_publish_at.isnot(None),
+            ContentItem.auto_publish_at <= now,
+        ).all()
 
-        send_content_ready(
-            to=config.notifications.client_email,
-            brand_name=config.brand_name,
-            count=1,
-        )
-
+        for item in items:
+            item.status = ContentStatus.approved
+            item.approved_at = now
+            item.auto_publish_at = None
+            logger.info(f"[{client_id}] Review window closed — auto-approved item {item.id}")
+        if items:
+            db.commit()
     except Exception as e:
-        logger.error(f"[{client_id}] GBP post generation failed: {e}")
-        db.rollback()
+        logger.error(f"[{client_id}] auto_publish_expired_reviews_job failed: {e}")
     finally:
         db.close()
-
 
 
 def publish_approved_content_job(client_id: str):
@@ -369,6 +372,17 @@ def generate_report_job(client_id: str):
 
 # ── Scheduler setup ───────────────────────────────────────────────────────────
 
+def _monthly_days(count: int) -> str:
+    """Day-of-month cron spec spreading `count` runs evenly across the month.
+
+    Capped at the 28th so every month fires the same number of times — a run
+    pinned to the 30th silently never happens in February.
+    """
+    count = max(1, min(count, 28))
+    days = sorted({1 + round(i * 28 / count) for i in range(count)})
+    return ",".join(str(d) for d in days)
+
+
 def register_client_jobs(config: ClientConfig):
     """Register all cron jobs for a single client."""
     cid = config.client_id
@@ -383,21 +397,21 @@ def register_client_jobs(config: ClientConfig):
         replace_existing=True,
     )
 
-    # Blog draft — 1st of each month at 07:00 UTC
+    # Blog drafts — spread across the month per the client's contracted volume
     scheduler.add_job(
         generate_blog_draft_job,
-        CronTrigger(day=1, hour=7, minute=0),
+        CronTrigger(day=_monthly_days(sched.blog_posts_per_month), hour=7, minute=0),
         args=[cid],
         id=f"{cid}_blog_draft",
         replace_existing=True,
     )
 
-    # GBP posts — every 7 days (weekly), Monday at 08:00 UTC
+    # Close expired client review windows — hourly, just before the publish sweep
     scheduler.add_job(
-        generate_gbp_post_job,
-        CronTrigger(day_of_week="mon", hour=8, minute=0),
+        auto_publish_expired_reviews_job,
+        CronTrigger(minute=10),
         args=[cid],
-        id=f"{cid}_gbp_post",
+        id=f"{cid}_auto_publish_expired",
         replace_existing=True,
     )
 
@@ -468,3 +482,49 @@ def _get_db_client_id(db, client_id: str) -> int:
     if not client:
         raise ValueError(f"Client '{client_id}' not found in database")
     return client.id
+
+
+def _media_client_id(db, db_client_id: int) -> int:
+    """Which client's library to draw photos from.
+
+    A client can delegate its media to a sibling via media_source_client_id —
+    the portal's media routes already honour this, and the scheduler has to
+    agree or a delegating client silently finds no photos at all.
+    """
+    from portal.api.models import Client
+    client = db.query(Client).filter(Client.id == db_client_id).first()
+    if client and client.media_source_client_id:
+        return client.media_source_client_id
+    return db_client_id
+
+
+def _next_photo(db, config: ClientConfig, db_client_id: int):
+    """A random photo this client may post, chosen from ones not already used.
+
+    "Used" is measured by whether a content item still points at the photo,
+    rather than by a timestamp. That distinction matters: photos are claimed at
+    generation time, so if a draft is discarded before it ever publishes, the
+    row goes away and the photo returns to the pool by itself.
+
+    When brands share a library, media_category keeps each one to its own work.
+    """
+    from sqlalchemy import func, nullsfirst
+
+    q = db.query(MediaItem).filter(MediaItem.client_id == _media_client_id(db, db_client_id))
+    if config.media_category:
+        # JSON accessor rather than json_extract — the latter does not exist on Postgres.
+        q = q.filter(MediaItem.meta["category"].as_string() == config.media_category)
+
+    claimed = db.query(ContentItem.image_url).filter(ContentItem.image_url.isnot(None))
+    photo = q.filter(MediaItem.url.notin_(claimed)).order_by(func.random()).first()
+    if photo:
+        return photo
+
+    # Exhausted — every eligible photo is already spoken for. Reuse the one that
+    # has sat unused the longest rather than going quiet.
+    logger.warning(
+        f"[{config.client_id}] Every eligible photo has been used"
+        + (f" in category '{config.media_category}'" if config.media_category else "")
+        + " — falling back to the least recently used"
+    )
+    return q.order_by(nullsfirst(MediaItem.last_used_at.asc())).first()
