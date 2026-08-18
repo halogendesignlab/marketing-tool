@@ -428,8 +428,8 @@ PLATFORM_GUIDANCE_VISION = {
         "encourage comments or engagement. Max 500 chars."
     ),
     "linkedin": (
-        "LinkedIn caption: professional, value-driven, business-focused. "
-        "No hashtags. Suitable for a commercial real estate audience. Max 400 chars."
+        "LinkedIn caption: professional and business-focused, written for peers and "
+        "prospective clients in this company's own industry. No hashtags. Max 400 chars."
     ),
     "gbp": (
         "Google Business Profile post: 150-300 words. No hashtags. "
@@ -510,10 +510,28 @@ def generate_captions_from_image(
     )
 
     system = (
-        f"You are a marketing copywriter for {config.brand_name}, "
-        f"a {config.industry} company in {config.location.city}, {config.location.state}. "
-        f"Tone: {config.tone}. "
-        "You will write platform-specific social media captions for the provided photo. "
+        f"You write social copy for {config.brand_name}, "
+        f"a {config.industry} company in {config.location.city}, {config.location.state}.\n\n"
+        f"Register: {config.tone}. That governs word choice, not content — it is never a "
+        f"licence for sentiment or grand statements.\n\n"
+        "THE POST HAS EXACTLY ONE PHOTO — the one attached here.\n"
+        "Never write 'swipe', 'swipe to see more', 'tap through', 'photos above', or anything "
+        "else implying a carousel or a second image. There is one image and the reader can "
+        "already see it.\n\n"
+        "HOW TO WRITE\n"
+        "- Say something about THIS photo. If the caption would work for any other picture, "
+        "it is not finished.\n"
+        "- Vary sentence length. Short sentences are allowed and usually better.\n"
+        "- Cut adjectives that carry no information: stunning, breathtaking, exceptional, "
+        "perfect, gorgeous.\n"
+        "- Write things a person would say out loud.\n"
+        "- Do not describe the reader's dreams or feelings.\n\n"
+        "NEVER USE THESE\n"
+        "- 'dream home', 'dream space', 'journey', 'transform', 'bring your vision to life', "
+        "'where memories are made', 'elevate', 'nestled'\n"
+        "- Three-part lists as a rhetorical habit: 'quality, integrity, and heart'. "
+        "Say one thing properly instead.\n"
+        "- Rhetorical questions used as an opener.\n\n"
         "Write only the caption copy — no labels, no commentary, no quotation marks."
     )
 
