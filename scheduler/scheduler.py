@@ -5,14 +5,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from core.config_loader import load_all_clients, ClientConfig
-from core.content_generator import (
-    generate_blog_draft,
-    generate_captions_from_image,
-    recent_blog_titles,
-)
-from core.email_notifier import send_content_ready
+from core.media_rotation import GBP_GALLERY_KEY, next_photo
 from portal.api.database import SessionLocal
-from portal.api.models import ContentItem, ContentType, ContentStatus, Platform, MediaItem
+from portal.api.models import ContentItem, ContentType, ContentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +16,21 @@ scheduler = BackgroundScheduler(timezone="UTC")
 
 # ── Job functions ─────────────────────────────────────────────────────────────
 
-def generate_social_captions_job(client_id: str):
-    """Generate weekly social posts from media library using Claude vision."""
+# Content generation is no longer scheduled. Blog posts and social captions are
+# produced on demand from the portal — see the generate endpoints in
+# portal/api/routes/approvals.py. The GBP gallery upload below is the only
+# content the scheduler still creates by itself.
+
+
+def upload_gbp_photo_job(client_id: str):
+    """Add one photo to the client's Google Business Profile gallery.
+
+    Google is deliberately not part of the weekly caption run. It gets a gallery
+    photo rather than an Update, so this draws from the same rotation and posts
+    the image on its own.
+    """
     from core.config_loader import load_client_config
+    from core.publer_publisher import upload_gbp_photo
     from datetime import datetime, timezone
 
     config = load_client_config(client_id)
@@ -31,105 +38,35 @@ def generate_social_captions_job(client_id: str):
 
     try:
         db_client_id = _get_db_client_id(db, client_id)
-
-        media_item = _next_photo(db, config, db_client_id)
-
-        if not media_item:
-            logger.warning(
-                f"[{client_id}] No media items in library"
-                + (f" for category '{config.media_category}'" if config.media_category else "")
-                + " — skipping weekly captions"
-            )
+        photo = next_photo(db, config, db_client_id)
+        if not photo:
+            logger.warning(f"[{client_id}] No eligible photo — skipping GBP gallery upload")
             return
 
-        captions = generate_captions_from_image(
-            config=config,
-            image_path=media_item.url,
-            image_filename=media_item.filename,
-            image_meta=media_item.meta,
-        )
+        # Google shows this as the photo's description. The project name is the
+        # only text here; there is no caption to write.
+        description = (photo.meta or {}).get("project") or ""
+        upload_gbp_photo(config, image_url=photo.url, description=description)
 
-        platform_map = {
-            "instagram": Platform.instagram,
-            "facebook": Platform.facebook,
-            "linkedin": Platform.linkedin,
-            "gbp": Platform.gbp,
-        }
-
-        total = 0
-        for platform_key, platform_enum in platform_map.items():
-            caption_text = captions.get(platform_key, "")
-            if not caption_text:
-                continue
-            item = ContentItem(
-                client_id=db_client_id,
-                content_type=ContentType.social_caption,
-                platform=platform_enum,
-                status=ContentStatus.pending_approval,
-                body=caption_text,
-                image_url=media_item.url,
-            )
-            db.add(item)
-            total += 1
-
-        media_item.last_used_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        photo.last_used_at = now
+        # Reassign rather than mutate — SQLAlchemy does not track in-place edits
+        # to a JSON column, so a mutated dict would never persist.
+        photo.meta = {**(photo.meta or {}), GBP_GALLERY_KEY: now.isoformat()}
         db.commit()
-        logger.info(f"[{client_id}] Generated {total} platform captions from image {media_item.filename}")
-
-        send_content_ready(
-            to=config.notifications.client_email,
-            brand_name=config.brand_name,
-            count=total,
-        )
+        logger.info(f"[{client_id}] Uploaded {photo.filename} to GBP gallery")
 
     except Exception as e:
-        logger.error(f"[{client_id}] Social caption generation failed: {e}")
+        logger.error(f"[{client_id}] GBP gallery upload failed: {e}")
         db.rollback()
     finally:
         db.close()
 
 
-def generate_blog_draft_job(client_id: str):
-    """Generate a monthly blog draft and queue for approval."""
-    from core.config_loader import load_client_config
-    config = load_client_config(client_id)
-    db = SessionLocal()
-
-    try:
-        db_client_id = _get_db_client_id(db, client_id)
-        draft = generate_blog_draft(
-            config,
-            recent_titles=recent_blog_titles(db, db_client_id),
-        )
-        item = ContentItem(
-            client_id=db_client_id,
-            content_type=ContentType.blog_post,
-            status=ContentStatus.pending_approval,
-            title=draft["title"],
-            body=draft["body"],
-        )
-        db.add(item)
-        db.commit()
-        logger.info(f"[{client_id}] Generated blog draft: {draft['title']}")
-
-        send_content_ready(
-            to=config.notifications.client_email,
-            brand_name=config.brand_name,
-            count=1,
-        )
-
-    except Exception as e:
-        logger.error(f"[{client_id}] Blog draft generation failed: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
-
-# A standalone weekly GBP post job used to live here. It was removed: the weekly
-# caption job already writes a GBP caption for the photo it selects, so the two
-# produced a duplicate GBP update every Monday — and this one had no photo, no
-# keyword context and no memory of previous posts. Admins can still generate a
-# one-off GBP post from the portal, which calls generate_gbp_post directly.
+# A standalone weekly GBP *post* job used to live here, writing a text-only
+# Update. It was removed: it duplicated the caption job's GBP output, and Google
+# now gets a gallery photo instead. Admins can still generate a one-off GBP post
+# from the portal, which calls generate_gbp_post directly.
 
 
 def auto_publish_expired_reviews_job(client_id: str):
@@ -372,37 +309,20 @@ def generate_report_job(client_id: str):
 
 # ── Scheduler setup ───────────────────────────────────────────────────────────
 
-def _monthly_days(count: int) -> str:
-    """Day-of-month cron spec spreading `count` runs evenly across the month.
-
-    Capped at the 28th so every month fires the same number of times — a run
-    pinned to the 30th silently never happens in February.
-    """
-    count = max(1, min(count, 28))
-    days = sorted({1 + round(i * 28 / count) for i in range(count)})
-    return ",".join(str(d) for d in days)
-
-
 def register_client_jobs(config: ClientConfig):
     """Register all cron jobs for a single client."""
     cid = config.client_id
     sched = config.schedule  # noqa: F841 — used below for day-of-month settings
 
-    # Social captions — every Monday at 06:00 UTC
-    scheduler.add_job(
-        generate_social_captions_job,
-        CronTrigger(day_of_week="mon", hour=6, minute=0),
-        args=[cid],
-        id=f"{cid}_social_captions",
-        replace_existing=True,
-    )
 
-    # Blog drafts — spread across the month per the client's contracted volume
+
+    # GBP gallery photo — Mondays at 08:00 UTC. Runs after the caption job so that
+    # job's photo is already claimed and cannot be picked again here.
     scheduler.add_job(
-        generate_blog_draft_job,
-        CronTrigger(day=_monthly_days(sched.blog_posts_per_month), hour=7, minute=0),
+        upload_gbp_photo_job,
+        CronTrigger(day_of_week="mon", hour=8, minute=0),
         args=[cid],
-        id=f"{cid}_blog_draft",
+        id=f"{cid}_gbp_photo",
         replace_existing=True,
     )
 
@@ -482,49 +402,3 @@ def _get_db_client_id(db, client_id: str) -> int:
     if not client:
         raise ValueError(f"Client '{client_id}' not found in database")
     return client.id
-
-
-def _media_client_id(db, db_client_id: int) -> int:
-    """Which client's library to draw photos from.
-
-    A client can delegate its media to a sibling via media_source_client_id —
-    the portal's media routes already honour this, and the scheduler has to
-    agree or a delegating client silently finds no photos at all.
-    """
-    from portal.api.models import Client
-    client = db.query(Client).filter(Client.id == db_client_id).first()
-    if client and client.media_source_client_id:
-        return client.media_source_client_id
-    return db_client_id
-
-
-def _next_photo(db, config: ClientConfig, db_client_id: int):
-    """A random photo this client may post, chosen from ones not already used.
-
-    "Used" is measured by whether a content item still points at the photo,
-    rather than by a timestamp. That distinction matters: photos are claimed at
-    generation time, so if a draft is discarded before it ever publishes, the
-    row goes away and the photo returns to the pool by itself.
-
-    When brands share a library, media_category keeps each one to its own work.
-    """
-    from sqlalchemy import func, nullsfirst
-
-    q = db.query(MediaItem).filter(MediaItem.client_id == _media_client_id(db, db_client_id))
-    if config.media_category:
-        # JSON accessor rather than json_extract — the latter does not exist on Postgres.
-        q = q.filter(MediaItem.meta["category"].as_string() == config.media_category)
-
-    claimed = db.query(ContentItem.image_url).filter(ContentItem.image_url.isnot(None))
-    photo = q.filter(MediaItem.url.notin_(claimed)).order_by(func.random()).first()
-    if photo:
-        return photo
-
-    # Exhausted — every eligible photo is already spoken for. Reuse the one that
-    # has sat unused the longest rather than going quiet.
-    logger.warning(
-        f"[{config.client_id}] Every eligible photo has been used"
-        + (f" in category '{config.media_category}'" if config.media_category else "")
-        + " — falling back to the least recently used"
-    )
-    return q.order_by(nullsfirst(MediaItem.last_used_at.asc())).first()
