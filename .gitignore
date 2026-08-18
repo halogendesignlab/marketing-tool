@@ -21,6 +21,7 @@ requirements.local.txt
 check_*.py
 test_*.py
 delete_*.py
+clear_*.py
 regen_*.py
 run_serp_now.py
 run_sync.py
