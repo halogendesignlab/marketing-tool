@@ -91,6 +91,19 @@ export async function recallFromClient(id: number) {
   return res.data;
 }
 
+export async function undoApproval(id: number) {
+  const res = await api.post(`/api/approvals/${id}/undo-approval`);
+  return res.data;
+}
+
+export async function updateContent(
+  id: number,
+  payload: { title?: string; body?: string; image_url?: string },
+) {
+  const res = await api.patch(`/api/approvals/${id}`, payload);
+  return res.data;
+}
+
 export async function deleteContent(id: number) {
   const res = await api.delete(`/api/approvals/${id}`);
   return res.data;
@@ -101,6 +114,13 @@ export async function getPendingApprovals(clientId?: number, status?: string) {
   if (clientId) params.client_id = clientId;
   if (status) params.status = status;
   const res = await api.get("/api/approvals/", { params });
+  return res.data;
+}
+
+export async function getPublished(clientId?: number, limit = 200, offset = 0) {
+  const params: Record<string, string | number> = { limit, offset };
+  if (clientId) params.client_id = clientId;
+  const res = await api.get("/api/approvals/published", { params });
   return res.data;
 }
 
