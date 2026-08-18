@@ -164,8 +164,16 @@ def upload_gbp_photo(
     config: ClientConfig,
     image_url: str,
     scheduled_for: datetime | None = None,
+    description: str = "",
 ) -> dict:
-    """Upload a photo to Google Business Profile via Publer."""
+    """Add a photo to the Google Business Profile photo gallery.
+
+    This is the gallery, not the Updates feed. The two are different surfaces on
+    the profile and Publer tells them apart by details.type — without it the same
+    payload posts an Update instead, which is what this function used to do.
+
+    `description` is optional; Google shows it as the photo's description.
+    """
     if not config.publer:
         raise ValueError(f"No Publer config for client {config.client_id}")
 
@@ -182,12 +190,15 @@ def upload_gbp_photo(
 
     payload = {
         "bulk": {
-            "state": "scheduled",
+            # "scheduled" without a scheduled_at has nothing to act on; let Publer
+            # queue it instead.
+            "state": "scheduled" if scheduled_for else "auto",
             "posts": [{
                 "networks": {
                     "google": {
                         "type": "photo",
-                        "text": "",
+                        "details": {"type": "photo"},
+                        "text": description,
                         "media": [media_obj],
                     }
                 },
