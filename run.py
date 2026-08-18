@@ -7,10 +7,11 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
+# Content generation is not here any more — blog posts and social captions are
+# produced from the portal, which is the only place they can be reviewed before
+# they publish. What remains is the work that runs without a human.
 TASKS = [
-    "generate_captions",
-    "generate_blog",
-    "generate_gbp_post",
+    "gbp_photo",
     "check_drive",
     "publish_approved",
     "onboard",
@@ -36,21 +37,13 @@ def main():
 
     logger.info(f"Running task '{task}' for client '{client_id}' ({config.brand_name})")
 
-    if task == "generate_captions":
-        from scheduler.scheduler import generate_social_captions_job
-        generate_social_captions_job(client_id)
-
-    elif task == "generate_blog":
-        from scheduler.scheduler import generate_blog_draft_job
-        generate_blog_draft_job(client_id)
-
-    elif task == "generate_gbp_post":
-        from scheduler.scheduler import generate_gbp_post_job
-        generate_gbp_post_job(client_id)
+    if task == "gbp_photo":
+        from scheduler.scheduler import upload_gbp_photo_job
+        upload_gbp_photo_job(client_id)
 
     elif task == "check_drive":
-        from scheduler.scheduler import check_drive_assets_job
-        check_drive_assets_job(client_id)
+        from scheduler.scheduler import sync_drive_media_job
+        sync_drive_media_job(client_id)
 
     elif task == "publish_approved":
         from scheduler.scheduler import publish_approved_content_job
