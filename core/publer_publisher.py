@@ -1,7 +1,7 @@
 """publer_publisher.py — Publish content via the Publer API."""
 
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from .config_loader import ClientConfig
 from portal.api.settings import get_settings
@@ -19,6 +19,21 @@ NETWORK_KEY = {
     "linkedin": "linkedin",
     "gbp": "google",
 }
+
+
+def _raise_with_body(resp) -> None:
+    """raise_for_status, but keep Publer's explanation.
+
+    The bare version discards the response body, which is where Publer puts the
+    actual reason — a 400 saying {"errors":["Unknown state auto"]} arrives as a
+    generic "Client error '400 Bad Request'" otherwise.
+    """
+    if resp.is_error:
+        raise httpx.HTTPStatusError(
+            f"{resp.status_code} from {resp.request.url}: {resp.text[:500]}",
+            request=resp.request,
+            response=resp,
+        )
 
 
 def _headers(workspace_id: str) -> dict:
@@ -78,7 +93,7 @@ def upload_media(image_url: str, workspace_id: str) -> dict:
             headers=_auth_headers(workspace_id),
             files={"file": (filename, image_bytes, content_type)},
         )
-        upload_resp.raise_for_status()
+        _raise_with_body(upload_resp)
         data = upload_resp.json()
         return {"id": data["id"], "type": data.get("type", "photo")}
 
@@ -98,12 +113,11 @@ def publish_social_post(
 
     workspace_id = _workspace_id(config)
 
-    if as_draft:
-        state = "draft"
-    elif scheduled_for:
-        state = "scheduled"
-    else:
-        state = "auto"  # let Publer queue at optimal time
+    # Publer accepts draft, scheduled and recurring. "auto" was rejected outright
+    # with {"errors":["Unknown state auto"]}, so a post approved without a date
+    # never published — posting now is expressed as scheduled for this moment.
+    state = "draft" if as_draft else "scheduled"
+    publish_at = scheduled_for or datetime.now(timezone.utc)
 
     # Upload media once and reuse across all platforms
     media_obj = None
@@ -113,8 +127,8 @@ def publish_social_post(
     accounts_payload = []
     for aid in account_ids:
         entry: dict = {"id": aid}
-        if scheduled_for and not as_draft:
-            entry["scheduled_at"] = scheduled_for.isoformat()
+        if not as_draft:
+            entry["scheduled_at"] = publish_at.isoformat()
         accounts_payload.append(entry)
 
     # Build the networks object — text and media must live inside each network key
@@ -139,7 +153,7 @@ def publish_social_post(
             headers=_headers(workspace_id),
             json=payload,
         )
-        resp.raise_for_status()
+        _raise_with_body(resp)
         return resp.json()
 
 
@@ -184,15 +198,13 @@ def upload_gbp_photo(
     workspace_id = _workspace_id(config)
     media_obj = upload_media(image_url, workspace_id)
 
-    entry: dict = {"id": gbp_id}
-    if scheduled_for:
-        entry["scheduled_at"] = scheduled_for.isoformat()
+    # See publish_social_post: "auto" is not a state Publer accepts. Uploading now
+    # is expressed as scheduled for this moment.
+    entry: dict = {"id": gbp_id, "scheduled_at": (scheduled_for or datetime.now(timezone.utc)).isoformat()}
 
     payload = {
         "bulk": {
-            # "scheduled" without a scheduled_at has nothing to act on; let Publer
-            # queue it instead.
-            "state": "scheduled" if scheduled_for else "auto",
+            "state": "scheduled",
             "posts": [{
                 "networks": {
                     "google": {
@@ -213,7 +225,7 @@ def upload_gbp_photo(
             headers=_headers(workspace_id),
             json=payload,
         )
-        resp.raise_for_status()
+        _raise_with_body(resp)
         return resp.json()
 
 
@@ -224,5 +236,5 @@ def get_post_status(job_id: str, workspace_id: str) -> dict:
             f"{BASE_URL}/job_status/{job_id}",
             headers=_auth_headers(workspace_id),
         )
-        resp.raise_for_status()
+        _raise_with_body(resp)
         return resp.json()
