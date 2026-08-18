@@ -85,23 +85,32 @@ def load_keywords(client_id: str) -> list[dict]:
     return rows
 
 
+# Low-priority terms are kept out of the blog tier. The research usually flags them
+# as ambiguous or unvalidated, yet their raw volume lets them outrank real topics.
+BLOG_TIER_PRIORITIES = {"High", "Med"}
+
+
 def get_blog_keywords(client_id: str, max_keywords: int = 10) -> list[dict]:
     """
     Return keywords suited for blog/content generation, in priority order:
-    1. Explicitly tagged Blog Post content type or Informational intent
+    1. Blog Post / Informational keywords that are High or Med priority
     2. High-priority Service Page keywords (great topic material even if
        the keyword research labels them as service pages — a blog post on
        'restaurant construction' still builds authority for that term)
-    3. Everything else by volume
+    3. Everything else, including anything demoted from tier 1, by priority then volume
+
+    Rows arrive from load_keywords() already sorted by priority then volume,
+    so each tier preserves that ordering.
     """
     all_kws = load_keywords(client_id)
     if not all_kws:
         return []
 
-    # Tier 1: explicitly blog/informational
+    # Tier 1: explicitly blog/informational, and worth targeting
     explicit = [
         k for k in all_kws
-        if "blog" in k["content_type"].lower() or "informational" in k["intent"].lower()
+        if ("blog" in k["content_type"].lower() or "informational" in k["intent"].lower())
+        and k["priority"] in BLOG_TIER_PRIORITIES
     ]
 
     # Tier 2: high-priority service page keywords not already in tier 1

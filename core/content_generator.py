@@ -90,7 +90,38 @@ def generate_social_captions_batch(
 
 # ── Blog posts ────────────────────────────────────────────────────────────────
 
-def generate_blog_draft(config: ClientConfig, topic: str | None = None) -> dict:
+def _trim_note(note: str, max_chars: int = 180) -> str:
+    """Keyword research notes run long; keep the gist without bloating the prompt."""
+    note = " ".join(note.split())
+    return note if len(note) <= max_chars else note[:max_chars].rstrip() + "…"
+
+def recent_blog_titles(db, client_db_id: int, limit: int = 12) -> list[str]:
+    """Titles of this client's recent blog posts, newest first.
+
+    Feeding these back into the prompt is what stops a monthly cadence from
+    circling the same few obvious topics.
+    """
+    from portal.api.models import ContentItem, ContentType
+
+    rows = (
+        db.query(ContentItem.title)
+        .filter(
+            ContentItem.client_id == client_db_id,
+            ContentItem.content_type == ContentType.blog_post,
+            ContentItem.title.isnot(None),
+        )
+        .order_by(ContentItem.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [r[0] for r in rows if r[0]]
+
+
+def generate_blog_draft(
+    config: ClientConfig,
+    topic: str | None = None,
+    recent_titles: list[str] | None = None,
+) -> dict:
     """Generate a blog post draft with semantic HTML body. Returns {title, body}."""
     from .keyword_loader import get_blog_keywords, get_all_keywords_summary
 
@@ -101,11 +132,15 @@ def generate_blog_draft(config: ClientConfig, topic: str | None = None) -> dict:
     keyword_context = ""
     if blog_kws:
         kw_lines = "\n".join(
-            f"- {k['keyword']} (vol:{k['volume']}, priority:{k['priority']})"
+            f"- {k['keyword']} (volume {k['volume']}, priority {k['priority']})"
+            + (f"\n  Researcher's note: {_trim_note(k['notes'])}" if k.get("notes") else "")
             for k in blog_kws
         )
         keyword_context = (
-            f"\n\nKeyword research to inform this post — weave relevant terms in naturally:\n{kw_lines}"
+            "\n\nKeyword research to inform this post — weave relevant terms in naturally. "
+            "Researcher's notes may warn that a term is ambiguous or unvalidated; "
+            "respect those warnings and skip the term rather than forcing it in.\n"
+            f"{kw_lines}"
         )
     else:
         # Fall back to full summary if no blog-specific keywords
@@ -130,9 +165,20 @@ def generate_blog_draft(config: ClientConfig, topic: str | None = None) -> dict:
         "- Weave in the city/state and relevant keywords naturally — do not stuff them, use them where they fit.\n"
         "- Each <h2> should target a specific subtopic a homeowner or buyer might search for."
     )
+    history_context = ""
+    if recent_titles:
+        titles = "\n".join(f"- {t}" for t in recent_titles)
+        history_context = (
+            "\n\nAlready published for this brand — do NOT repeat these topics or angles. "
+            "Pick a subject that is genuinely distinct, even if it means using a "
+            "lower-volume keyword:\n"
+            f"{titles}"
+        )
+
     user = (
         f"{_brand_context(config)}"
-        f"{keyword_context}\n\n"
+        f"{keyword_context}"
+        f"{history_context}\n\n"
         f"{topic_line}\n\n"
         "Write the blog post now. Remember: first line = plain text title, blank line, then semantic HTML body."
     )
