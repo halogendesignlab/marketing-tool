@@ -1,5 +1,6 @@
 """routes/approvals.py — Approve, edit, or reject content items."""
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -12,12 +13,28 @@ from ..auth import get_current_user
 from ..schemas import (
     ContentItemResponse, ApproveContentRequest, RejectContentRequest,
     GenerateDraftRequest, PublishedItemResponse, UpdateContentRequest,
+    GenerateBatchRequest, GenerateBatchResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 # Days a client has to review a blog post before it publishes on its own.
 BLOG_REVIEW_WINDOW_DAYS = 7
+
+
+def _as_utc(dt: datetime | None) -> datetime | None:
+    """Read a stored timestamp as UTC-aware.
+
+    Postgres hands back aware datetimes for these columns; SQLite hands back
+    naive ones regardless of timezone=True. Comparing a naive value against an
+    aware now() raises TypeError, so anything read off an item gets normalised
+    before it is compared.
+    """
+    if dt is None or dt.tzinfo is not None:
+        return dt
+    return dt.replace(tzinfo=timezone.utc)
 
 # What a client sees in their feed. Approved/scheduled items stay listed so the
 # decision is visible and reversible right up until the item actually goes live.
@@ -117,6 +134,7 @@ def generate_draft(
             config,
             topic=req.topic or None,
             recent_titles=recent_blog_titles(db, client_db_id),
+            focus_keyword=req.focus_keyword or None,
         )
 
         # Select images from the media library that best match the article
@@ -182,7 +200,11 @@ def generate_draft(
             title=draft["title"],
             body=enriched_body,
             image_url=blog_image_urls[0] if blog_image_urls else None,
-            meta={"blog_images": blog_image_urls} if blog_image_urls else None,
+            # focus_keyword is recorded so later runs can pick a different one.
+            meta={
+                **({"blog_images": blog_image_urls} if blog_image_urls else {}),
+                **({"focus_keyword": req.focus_keyword} if req.focus_keyword else {}),
+            } or None,
         )
 
     elif req.content_type == "gbp_post":
@@ -202,6 +224,126 @@ def generate_draft(
     db.commit()
     db.refresh(item)
     return item
+
+
+def _run_batch(
+    user_id: int,
+    client_db_id: int,
+    photo_ids: list[int],
+    blog_count: int,
+    platforms: list[str],
+):
+    """Generate a batch in the background, one item at a time.
+
+    Runs off-request because a full batch is several Claude calls and would sit
+    well past a proxy's read timeout. Each draft commits as it finishes, so the
+    queue fills progressively and one failure does not discard the rest.
+    """
+    from core.content_generator import pick_blog_keywords, recent_blog_keywords
+    from ..database import SessionLocal
+    from ..models import Client
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        client_row = db.query(Client).filter(Client.id == client_db_id).first()
+        if not user or not client_row:
+            logger.error("Batch generation: user %s or client %s vanished", user_id, client_db_id)
+            return
+
+        for photo_id in photo_ids:
+            try:
+                generate_draft(
+                    GenerateDraftRequest(
+                        content_type="social_caption",
+                        media_item_id=photo_id,
+                        platforms=platforms,
+                        client_id=client_db_id,
+                    ),
+                    current_user=user,
+                    db=db,
+                )
+            except Exception as e:
+                db.rollback()
+                logger.error("Batch generation: social draft for photo %s failed: %s", photo_id, e)
+
+        # Each blog gets its own keyword, chosen up front and skipping anything
+        # recent posts already targeted. Listing previous titles and asking for
+        # something different is not enough on its own — it yields a fresh title
+        # on the same subject.
+        keywords = pick_blog_keywords(
+            client_row.client_id,
+            blog_count,
+            exclude=recent_blog_keywords(db, client_db_id),
+        )
+        for n, keyword in enumerate(keywords):
+            try:
+                generate_draft(
+                    GenerateDraftRequest(
+                        content_type="blog_post",
+                        client_id=client_db_id,
+                        focus_keyword=keyword,
+                    ),
+                    current_user=user,
+                    db=db,
+                )
+            except Exception as e:
+                db.rollback()
+                logger.error("Batch generation: blog draft %s (%s) failed: %s", n + 1, keyword, e)
+
+        logger.info("Batch generation finished for client %s", client_db_id)
+    finally:
+        db.close()
+
+
+@router.post("/generate-batch", response_model=GenerateBatchResponse)
+def generate_batch(
+    req: GenerateBatchRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Queue a run of blog drafts plus multi-platform social drafts."""
+    from core.config_loader import load_client_config
+    from core.media_rotation import next_photos
+    from ..models import Client
+
+    if current_user.role == "admin" and req.client_id:
+        client_db_id = req.client_id
+    elif current_user.client_id:
+        client_db_id = current_user.client_id
+    else:
+        raise HTTPException(status_code=400, detail="No client context")
+
+    client_row = db.query(Client).filter(Client.id == client_db_id).first()
+    if not client_row:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    config = load_client_config(client_row.client_id)
+
+    # Claim the photos up front so the drafts cannot land on the same one — they
+    # are only excluded from the rotation once a content item points at them.
+    photos = next_photos(db, config, client_db_id, req.social_count)
+    if not photos and req.social_count:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No unused photos left in this client's library",
+        )
+
+    background_tasks.add_task(
+        _run_batch,
+        user_id=current_user.id,
+        client_db_id=client_db_id,
+        photo_ids=[p.id for p in photos],
+        blog_count=req.blog_count,
+        platforms=req.platforms,
+    )
+
+    return GenerateBatchResponse(
+        blog_count=req.blog_count,
+        social_count=len(photos),
+        platforms=req.platforms,
+    )
 
 
 @router.get("/", response_model=list[ContentItemResponse])
@@ -413,7 +555,14 @@ def approve_item(
 ):
     item = _get_item(item_id, current_user, db)
 
-    approvable = {ContentStatus.pending_approval, ContentStatus.client_review, ContentStatus.rejected}
+    # failed is approvable so a post that errored on publish can be retried:
+    # approving puts it back in front of the publish sweep.
+    approvable = {
+        ContentStatus.pending_approval,
+        ContentStatus.client_review,
+        ContentStatus.rejected,
+        ContentStatus.failed,
+    }
     if item.status not in approvable:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -430,6 +579,8 @@ def approve_item(
     item.status = ContentStatus.approved
     item.approved_by_id = current_user.id
     item.approved_at = datetime.now(timezone.utc)
+    # Clear the previous failure so a retry does not keep showing a stale error.
+    item.error_message = None
     # auto_publish_at is left intact so undoing restores the original deadline
     # rather than granting a fresh window. The auto-publish job is status-gated.
     db.commit()
@@ -634,7 +785,8 @@ def _maybe_publish_now(item_id: int):
             return
 
         # Only publish if no future schedule date
-        if item.scheduled_for and item.scheduled_for > now:
+        scheduled_for = _as_utc(item.scheduled_for)
+        if scheduled_for and scheduled_for > now:
             return
 
         from portal.api.models import Client

@@ -35,6 +35,18 @@ export default function ApprovalsPage() {
 
   useEffect(() => { loadDrafts(); }, [loadDrafts]);
 
+  /** Batch drafts are written after the request returns, so poll them in.
+   *  Refreshes quietly — no spinner — until the run has had time to finish. */
+  const pollForBatch = useCallback(() => {
+    const started = Date.now();
+    const timer = setInterval(() => {
+      getPendingApprovals(selectedClientId ?? undefined)
+        .then(setItems)
+        .catch(() => {});
+      if (Date.now() - started > 5 * 60 * 1000) clearInterval(timer);
+    }, 8000);
+  }, [selectedClientId]);
+
   const patch = (id: number, changes: Partial<ContentItem>) =>
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...changes } : i)));
 
@@ -195,6 +207,7 @@ export default function ApprovalsPage() {
         <GenerateWizard
           onClose={() => setShowWizard(false)}
           onCreated={(item) => setItems((prev) => [item, ...prev])}
+          onBatchQueued={pollForBatch}
           selectedClientId={selectedClientId}
         />
       )}

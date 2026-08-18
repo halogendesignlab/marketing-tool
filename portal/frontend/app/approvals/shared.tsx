@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { generateDraft, getMediaItems, getMediaItemCount } from "@/lib/api";
+import { generateDraft, generateBatch, getMediaItems, getMediaItemCount, getMediaFilters } from "@/lib/api";
 import toast from "react-hot-toast";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -20,6 +20,7 @@ export interface ContentItem {
   created_at: string;
   meta?: { platforms?: string[]; captions?: Record<string, string>; blog_images?: string[] } | null;
   rejection_reason?: string | null;
+  error_message?: string | null;
 }
 
 export interface MediaItem {
@@ -76,6 +77,8 @@ export function MediaBrowser({ clientId, isSelected, onPick, maxHeight = "max-h-
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
+  const [category, setCategory] = useState<string | null>(null);
 
   // Debounced so typing doesn't fire a request per keystroke.
   useEffect(() => {
@@ -83,7 +86,18 @@ export function MediaBrowser({ clientId, isSelected, onPick, maxHeight = "max-h-
     return () => clearTimeout(t);
   }, [search]);
 
-  const filters = useMemo(() => (query ? { search: query } : {}), [query]);
+  // Offered as chips rather than hardcoded, since categories are just the
+  // top-level Drive folder names and a new one can appear at any sync.
+  useEffect(() => {
+    getMediaFilters(clientId ?? undefined)
+      .then((f) => setCategories(f.categories ?? []))
+      .catch(() => setCategories([]));
+  }, [clientId]);
+
+  const filters = useMemo(
+    () => ({ ...(query ? { search: query } : {}), ...(category ? { category } : {}) }),
+    [query, category],
+  );
 
   const load = useCallback(
     (off: number) => {
@@ -123,13 +137,36 @@ export function MediaBrowser({ clientId, isSelected, onPick, maxHeight = "max-h-
         )}
       </div>
 
+      {categories.length > 1 && (
+        <div className="flex items-center gap-1.5 mb-2 shrink-0 flex-wrap">
+          {[null, ...categories].map((c) => {
+            const active = category === c;
+            return (
+              <button
+                key={c ?? "all"}
+                onClick={() => setCategory(c)}
+                className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors duration-150 ${
+                  active
+                    ? "bg-tint text-white border-tint"
+                    : "bg-white border-ink-600 text-fg-2 hover:border-tint"
+                }`}
+              >
+                {c ?? "All"}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className={`flex-1 overflow-y-auto pr-1 ${maxHeight}`}>
         {loading && items.length === 0 && (
           <p className="text-sm text-fg-3 text-center py-8">Loading photos…</p>
         )}
         {!loading && items.length === 0 && (
           <p className="text-sm text-fg-3 text-center py-8">
-            {query ? `No photos match “${query}”.` : "No photos in media library yet."}
+            {query || category
+              ? `No ${category ?? ""} photos${query ? ` match “${query}”` : ""}.`
+              : "No photos in media library yet."}
           </p>
         )}
         <div className="grid grid-cols-4 gap-2">
@@ -168,7 +205,12 @@ export function MediaBrowser({ clientId, isSelected, onPick, maxHeight = "max-h-
 
 // ── Generate wizard (admin only) ──────────────────────────────────────────────
 
+const BATCH_BLOGS = 2;
+const BATCH_PHOTOS = 4;
+const BATCH_PLATFORMS = ["instagram", "facebook", "linkedin"];
+
 const POST_TYPES = [
+  { key: "batch", label: "A month of content", desc: `${BATCH_BLOGS} blog posts and ${BATCH_PHOTOS} social posts across Instagram, Facebook and LinkedIn` },
   { key: "social_caption", label: "Social Caption", desc: "Generate captions for Instagram, Facebook, LinkedIn, or GBP from a photo" },
   { key: "blog_post", label: "Blog Post", desc: "AI-written 400–600 word blog draft for your website" },
   { key: "gbp_post", label: "GBP Post", desc: "150–300 word Google Business Profile post" },
@@ -181,9 +223,11 @@ const PLATFORMS = [
   { key: "gbp", label: "GBP" },
 ];
 
-export function GenerateWizard({ onClose, onCreated, selectedClientId }: {
+export function GenerateWizard({ onClose, onCreated, onBatchQueued, selectedClientId }: {
   onClose: () => void;
   onCreated: (item: ContentItem) => void;
+  /** Batch drafts are written after the request returns, so the caller polls. */
+  onBatchQueued?: () => void;
   selectedClientId: number | null;
 }) {
   const [step, setStep] = useState<"type" | "config" | "generating">("type");
@@ -196,7 +240,29 @@ export function GenerateWizard({ onClose, onCreated, selectedClientId }: {
     setPlatforms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
   };
 
+  const handleBatch = async () => {
+    setStep("generating");
+    try {
+      const res = await generateBatch({
+        client_id: selectedClientId ?? undefined,
+        blog_count: BATCH_BLOGS,
+        social_count: BATCH_PHOTOS,
+        platforms: BATCH_PLATFORMS,
+      });
+      const total = res.blog_count + res.social_count;
+      // The drafts are written in the background; onBatchQueued starts polling.
+      toast.success(`Generating ${total} drafts — they'll appear as they're ready`, { duration: 6000 });
+      onBatchQueued?.();
+      onClose();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Could not start generation";
+      toast.error(msg);
+      setStep("config");
+    }
+  };
+
   const handleGenerate = async () => {
+    if (postType === "batch") return handleBatch();
     if (postType === "social_caption" && !selectedMedia) { toast.error("Select a photo first"); return; }
     if (postType === "social_caption" && platforms.length === 0) { toast.error("Select at least one platform"); return; }
     setStep("generating");
@@ -275,6 +341,28 @@ export function GenerateWizard({ onClose, onCreated, selectedClientId }: {
               </div>
             </div>
           )}
+          {step === "config" && postType === "batch" && (
+            <div className="space-y-4">
+              <p className="text-sm text-fg-2">This will generate:</p>
+              <ul className="text-sm text-fg-2 space-y-1.5">
+                <li className="flex gap-2">
+                  <span className="text-tint">•</span>
+                  <span><strong>{BATCH_BLOGS} blog posts</strong>, each on a different subject from what&apos;s already been written</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-tint">•</span>
+                  <span><strong>{BATCH_PHOTOS} social posts</strong> — one per photo, each carrying an Instagram, Facebook and LinkedIn caption</span>
+                </li>
+              </ul>
+              <p className="text-xs text-fg-3">
+                Photos are picked at random from ones this client hasn&apos;t used. Everything lands
+                in your queue as a draft — nothing publishes without your approval.
+              </p>
+              <p className="text-xs text-fg-3">
+                Takes a few minutes. You can close this and the drafts will appear as they finish.
+              </p>
+            </div>
+          )}
           {step === "config" && (postType === "blog_post" || postType === "gbp_post") && (
             <div>
               <label className="text-sm font-medium text-fg-1 block mb-1.5">
@@ -299,7 +387,7 @@ export function GenerateWizard({ onClose, onCreated, selectedClientId }: {
             <button onClick={handleGenerate}
               disabled={postType === "social_caption" && (!selectedMedia || platforms.length === 0)}
               className="btn-primary disabled:opacity-40">
-              Generate
+              {postType === "batch" ? `Generate ${BATCH_BLOGS + BATCH_PHOTOS} drafts` : "Generate"}
             </button>
           </div>
         )}

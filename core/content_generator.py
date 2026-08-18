@@ -95,6 +95,51 @@ def _trim_note(note: str, max_chars: int = 180) -> str:
     note = " ".join(note.split())
     return note if len(note) <= max_chars else note[:max_chars].rstrip() + "…"
 
+def recent_blog_keywords(db, client_db_id: int, limit: int = 24) -> set[str]:
+    """Focus keywords this client's recent blog posts already targeted.
+
+    Recorded on the item when the draft is created, so a later run can pick
+    something else rather than rediscovering the same top-volume term.
+    """
+    from portal.api.models import ContentItem, ContentType
+
+    rows = (
+        db.query(ContentItem.meta)
+        .filter(
+            ContentItem.client_id == client_db_id,
+            ContentItem.content_type == ContentType.blog_post,
+        )
+        .order_by(ContentItem.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        (r[0] or {}).get("focus_keyword", "").lower()
+        for r in rows
+        if (r[0] or {}).get("focus_keyword")
+    }
+
+
+def pick_blog_keywords(client_id: str, count: int, exclude: set[str] | None = None) -> list[str]:
+    """`count` distinct blog keywords, skipping any already used.
+
+    Falls back to reusing the best terms once the research runs dry — a client
+    with three usable keywords should still be able to ask for four posts.
+    """
+    from .keyword_loader import get_blog_keywords
+
+    exclude = {e.lower() for e in (exclude or set())}
+    ranked = [k["keyword"] for k in get_blog_keywords(client_id, max_keywords=40)]
+
+    fresh = [k for k in ranked if k.lower() not in exclude]
+    if len(fresh) >= count:
+        return fresh[:count]
+
+    # Top up from the used ones rather than returning fewer than asked for.
+    used = [k for k in ranked if k.lower() in exclude]
+    return (fresh + used)[:count]
+
+
 def recent_blog_titles(db, client_db_id: int, limit: int = 12) -> list[str]:
     """Titles of this client's recent blog posts, newest first.
 
@@ -121,11 +166,29 @@ def generate_blog_draft(
     config: ClientConfig,
     topic: str | None = None,
     recent_titles: list[str] | None = None,
+    focus_keyword: str | None = None,
 ) -> dict:
-    """Generate a blog post draft with semantic HTML body. Returns {title, body}."""
+    """Generate a blog post draft with semantic HTML body. Returns {title, body}.
+
+    `focus_keyword` pins the post to one search term. Listing previous titles and
+    asking for something different is a weak guard — it reliably produces a new
+    title while staying on the same subject. Handing each post its own keyword
+    makes the topics distinct by construction instead.
+    """
     from .keyword_loader import get_blog_keywords, get_all_keywords_summary
 
-    topic_line = f"Topic: {topic}" if topic else "Choose a relevant, SEO-friendly topic for this brand."
+    if focus_keyword:
+        topic_line = (
+            f"Primary keyword for this post: \"{focus_keyword}\"\n"
+            "Build the post around that search term — it should be the subject of the "
+            "article, not a passing mention. Use it in the title where it reads naturally."
+        )
+        if topic:
+            topic_line += f"\nAdditional direction: {topic}"
+    elif topic:
+        topic_line = f"Topic: {topic}"
+    else:
+        topic_line = "Choose a relevant, SEO-friendly topic for this brand."
 
     # Pull keyword context from research CSV if available
     blog_kws = get_blog_keywords(config.client_id, max_keywords=8)

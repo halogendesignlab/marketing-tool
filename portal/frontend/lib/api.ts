@@ -136,6 +136,18 @@ export async function generateDraft(payload: {
   return res.data;
 }
 
+/** Queues a run of drafts. Returns once queued — the drafts arrive over the
+ *  following minutes, so callers should refetch rather than await the content. */
+export async function generateBatch(payload: {
+  client_id?: number;
+  blog_count?: number;
+  social_count?: number;
+  platforms?: string[];
+}): Promise<{ blog_count: number; social_count: number; platforms: string[] }> {
+  const res = await api.post("/api/approvals/generate-batch", payload);
+  return res.data;
+}
+
 // ── Assets ────────────────────────────────────────────────────────────────────
 
 export async function getAssets(params?: Record<string, string | number>) {

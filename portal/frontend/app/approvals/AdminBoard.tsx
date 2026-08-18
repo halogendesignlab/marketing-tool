@@ -19,7 +19,10 @@ export interface BoardHandlers {
 type ColumnKey = "queue" | "with_client" | "scheduled";
 
 const COLUMNS: { key: ColumnKey; title: string; hint: string; statuses: string[] }[] = [
-  { key: "queue",       title: "Your queue",  hint: "Review, edit, then send",     statuses: ["pending_approval", "rejected"] },
+  // `failed` sits here too. A post that errored on publish needs an admin, and
+  // any status without a column is dropped by columnOf — which is how failures
+  // used to vanish from the board entirely.
+  { key: "queue",       title: "Your queue",  hint: "Review, edit, then send",     statuses: ["pending_approval", "rejected", "failed"] },
   { key: "with_client", title: "With client", hint: "Waiting on their decision",   statuses: ["client_review"] },
   { key: "scheduled",   title: "Scheduled",   hint: "Approved and queued to post", statuses: ["approved", "scheduled"] },
 ];
@@ -47,6 +50,7 @@ function Card({ item, selected, selectable, onToggleSelect, onOpen, onDragStart 
 }) {
   const src = item.image_url ? imgSrc(item.image_url) : null;
   const wasRejected = item.status === "rejected";
+  const didFail = item.status === "failed";
 
   return (
     <div
@@ -61,6 +65,13 @@ function Card({ item, selected, selectable, onToggleSelect, onOpen, onDragStart 
         <div className="px-3 py-1.5 bg-signal-bad/8 border-b border-signal-bad/20">
           <p className="text-xs text-signal-bad font-medium">
             Changes requested{item.rejection_reason ? `: ${item.rejection_reason}` : ""}
+          </p>
+        </div>
+      )}
+      {didFail && (
+        <div className="px-3 py-1.5 bg-signal-warn/8 border-b border-signal-warn/20">
+          <p className="text-xs text-signal-warn font-medium">
+            Didn’t publish{item.error_message ? `: ${item.error_message}` : ""}
           </p>
         </div>
       )}
@@ -198,6 +209,17 @@ function DetailOverlay({ item, clientId, handlers, onClose }: {
                 </p>
               </div>
             )}
+            {item.status === "failed" && (
+              <div className="rounded-lg border border-signal-warn/25 bg-signal-warn/5 px-3 py-2.5">
+                <p className="text-sm text-signal-warn">
+                  <span className="font-medium">Didn’t publish: </span>
+                  {item.error_message || "no error was recorded"}
+                </p>
+                <p className="text-xs text-signal-warn/80 mt-1">
+                  Approving puts it back in the publish queue to try again.
+                </p>
+              </div>
+            )}
             {item.title && <h2 className="font-display font-semibold text-fg-1 text-lg">{item.title}</h2>}
             {src && (
               <div className="relative">
@@ -237,7 +259,7 @@ function DetailOverlay({ item, clientId, handlers, onClose }: {
                 </button>
                 <button onClick={() => run("approve", () => handlers.onApprove(item.id, body, imageUrl ?? undefined))}
                   disabled={!!busy} className="btn-ghost disabled:opacity-50">
-                  Approve &amp; post
+                  {item.status === "failed" ? "Retry publish" : "Approve & post"}
                 </button>
               </>
             )}
