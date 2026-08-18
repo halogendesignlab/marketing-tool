@@ -91,6 +91,19 @@ export async function recallFromClient(id: number) {
   return res.data;
 }
 
+export async function undoApproval(id: number) {
+  const res = await api.post(`/api/approvals/${id}/undo-approval`);
+  return res.data;
+}
+
+export async function updateContent(
+  id: number,
+  payload: { title?: string; body?: string; image_url?: string },
+) {
+  const res = await api.patch(`/api/approvals/${id}`, payload);
+  return res.data;
+}
+
 export async function deleteContent(id: number) {
   const res = await api.delete(`/api/approvals/${id}`);
   return res.data;
@@ -104,6 +117,13 @@ export async function getPendingApprovals(clientId?: number, status?: string) {
   return res.data;
 }
 
+export async function getPublished(clientId?: number, limit = 200, offset = 0) {
+  const params: Record<string, string | number> = { limit, offset };
+  if (clientId) params.client_id = clientId;
+  const res = await api.get("/api/approvals/published", { params });
+  return res.data;
+}
+
 export async function generateDraft(payload: {
   content_type: string;
   platform?: string;
@@ -113,6 +133,18 @@ export async function generateDraft(payload: {
   client_id?: number;
 }) {
   const res = await api.post("/api/approvals/generate", payload);
+  return res.data;
+}
+
+/** Queues a run of drafts. Returns once queued — the drafts arrive over the
+ *  following minutes, so callers should refetch rather than await the content. */
+export async function generateBatch(payload: {
+  client_id?: number;
+  blog_count?: number;
+  social_count?: number;
+  platforms?: string[];
+}): Promise<{ blog_count: number; social_count: number; platforms: string[] }> {
+  const res = await api.post("/api/approvals/generate-batch", payload);
   return res.data;
 }
 

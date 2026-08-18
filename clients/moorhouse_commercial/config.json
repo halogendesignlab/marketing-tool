@@ -24,12 +24,12 @@
     }
   },
   "publer": {
-    "workspace_id": "69f66ded31d99b0c59366ee5",
+    "workspace_id": "6a848043db7f14b0654f2aa6",
     "social_profile_ids": {
-      "instagram": "69f7582c2c63a6ec70861dd8",
+      "instagram": "",
       "facebook": "",
       "linkedin": "",
-      "gbp": ""
+      "gbp": "6a84807e10b1765c1abda1f2"
     }
   },
   "gbp": {
@@ -43,7 +43,7 @@
   },
   "schedule": {
     "social_posts_per_month": 12,
-    "blog_posts_per_month": 1,
+    "blog_posts_per_month": 2,
     "gbp_posts_per_month": 4,
     "gbp_image_uploads_per_week": 1,
     "report_day_of_month": 1,
@@ -66,7 +66,7 @@
   },
   "notifications": {
     "client_email": "client@moorhousecommercial.com",
-    "admin_email": "caleb@halogendesignlab.com"
+    "admin_email": "hello@halogenboise.com"
   },
   "portal_users": [
     {
@@ -74,5 +74,6 @@
       "role": "client",
       "name": "Moorhouse Commercial Team"
     }
-  ]
+  ],
+  "media_category": "Commercial"
 }

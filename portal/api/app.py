@@ -41,6 +41,27 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"media_source_client_id migration failed: {e}")
 
+    # Migrate: add auto_publish_at column if not present
+    try:
+        from sqlalchemy import text as _text
+        from .database import SessionLocal as _SL
+        _db3 = _SL()
+        # SQLite (dev) has no IF NOT EXISTS for ADD COLUMN — let the duplicate error be the guard.
+        if engine.dialect.name == "postgresql":
+            _sql = "ALTER TABLE content_items ADD COLUMN IF NOT EXISTS auto_publish_at TIMESTAMPTZ"
+        else:
+            _sql = "ALTER TABLE content_items ADD COLUMN auto_publish_at DATETIME"
+        try:
+            _db3.execute(_text(_sql))
+            _db3.commit()
+            logger.info("Added auto_publish_at column")
+        except Exception:
+            _db3.rollback()  # column already exists
+        finally:
+            _db3.close()
+    except Exception as e:
+        logger.error(f"auto_publish_at migration failed: {e}")
+
     # Migrate: populate user_clients from existing client_id values
     try:
         from sqlalchemy import text

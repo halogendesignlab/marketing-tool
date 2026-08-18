@@ -24,12 +24,12 @@
     }
   },
   "publer": {
-    "workspace_id": "",
+    "workspace_id": "6a84809fd9816f43506a28c2",
     "social_profile_ids": {
       "instagram": "",
       "facebook": "",
       "linkedin": "",
-      "gbp": ""
+      "gbp": "6a8480b2f8eecda39b59659a"
     }
   },
   "gbp": {
@@ -43,7 +43,7 @@
   },
   "schedule": {
     "social_posts_per_month": 12,
-    "blog_posts_per_month": 1,
+    "blog_posts_per_month": 2,
     "gbp_posts_per_month": 4,
     "gbp_image_uploads_per_week": 1,
     "report_day_of_month": 1,
@@ -63,7 +63,7 @@
   },
   "notifications": {
     "client_email": "client@moorhousehomes.com",
-    "admin_email": "caleb@halogendesignlab.com"
+    "admin_email": "hello@halogenboise.com"
   },
   "portal_users": [
     {
@@ -71,5 +71,6 @@
       "role": "client",
       "name": "Moorhouse Homes Team"
     }
-  ]
+  ],
+  "media_category": "Houses"
 }

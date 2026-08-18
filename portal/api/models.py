@@ -143,6 +143,9 @@ class ContentItem(Base):
     scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     publer_post_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Deadline after which a client_review item publishes without client action.
+    # Cleared whenever the item leaves the client's hands, so the clock cannot run during revisions.
+    auto_publish_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Approval
     approved_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)

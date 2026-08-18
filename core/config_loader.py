@@ -104,6 +104,10 @@ class ClientConfig(BaseModel):
     drive: Optional[DriveConfig] = None
     gsc: Optional[GSCConfig] = None
     local_falcon: Optional[LocalFalconConfig] = None
+    # Restricts automated photo selection to one media-library category. Needed
+    # when two brands share a library: without it, a commercial contractor draws
+    # from a pool that is overwhelmingly residential. None = no restriction.
+    media_category: Optional[str] = None
     directories_to_monitor: list[str] = ["google", "yelp", "bbb", "yellowpages", "bing"]
     schedule: ScheduleConfig = ScheduleConfig()
     notifications: NotificationsConfig

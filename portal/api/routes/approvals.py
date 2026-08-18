@@ -1,17 +1,51 @@
 """routes/approvals.py — Approve, edit, or reject content items."""
 
-from datetime import datetime, timezone
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import ContentItem, ContentStatus, User
+from ..models import ContentItem, ContentStatus, ContentType, User
 from ..auth import get_current_user
-from ..schemas import ContentItemResponse, ApproveContentRequest, RejectContentRequest, GenerateDraftRequest
+from ..schemas import (
+    ContentItemResponse, ApproveContentRequest, RejectContentRequest,
+    GenerateDraftRequest, PublishedItemResponse, UpdateContentRequest,
+    GenerateBatchRequest, GenerateBatchResponse,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Days a client has to review a blog post before it publishes on its own.
+BLOG_REVIEW_WINDOW_DAYS = 7
+
+
+def _as_utc(dt: datetime | None) -> datetime | None:
+    """Read a stored timestamp as UTC-aware.
+
+    Postgres hands back aware datetimes for these columns; SQLite hands back
+    naive ones regardless of timezone=True. Comparing a naive value against an
+    aware now() raises TypeError, so anything read off an item gets normalised
+    before it is compared.
+    """
+    if dt is None or dt.tzinfo is not None:
+        return dt
+    return dt.replace(tzinfo=timezone.utc)
+
+# What a client sees in their feed. Approved/scheduled items stay listed so the
+# decision is visible and reversible right up until the item actually goes live.
+CLIENT_VISIBLE_STATUSES = (
+    ContentStatus.client_review,
+    ContentStatus.approved,
+    ContentStatus.scheduled,
+)
+
+# Statuses a client may pull back to their own review queue.
+UNDOABLE_STATUSES = (ContentStatus.approved, ContentStatus.scheduled)
 
 
 @router.post("/generate", response_model=ContentItemResponse)
@@ -22,7 +56,10 @@ def generate_draft(
 ):
     """Generate a content draft on demand and save it as pending_approval."""
     from core.config_loader import load_client_config
-    from core.content_generator import generate_captions_from_image, generate_blog_draft, generate_gbp_post
+    from core.content_generator import (
+        generate_captions_from_image, generate_blog_draft, generate_gbp_post,
+        recent_blog_titles,
+    )
     from ..models import Client, MediaItem, ContentType, Platform
 
     # Resolve client
@@ -93,7 +130,12 @@ def generate_draft(
         media_item.last_used_at = datetime.now(timezone.utc)
 
     elif req.content_type == "blog_post":
-        draft = generate_blog_draft(config, topic=req.topic or None)
+        draft = generate_blog_draft(
+            config,
+            topic=req.topic or None,
+            recent_titles=recent_blog_titles(db, client_db_id),
+            focus_keyword=req.focus_keyword or None,
+        )
 
         # Select images from the media library that best match the article
         from sqlalchemy import nullsfirst
@@ -158,7 +200,11 @@ def generate_draft(
             title=draft["title"],
             body=enriched_body,
             image_url=blog_image_urls[0] if blog_image_urls else None,
-            meta={"blog_images": blog_image_urls} if blog_image_urls else None,
+            # focus_keyword is recorded so later runs can pick a different one.
+            meta={
+                **({"blog_images": blog_image_urls} if blog_image_urls else {}),
+                **({"focus_keyword": req.focus_keyword} if req.focus_keyword else {}),
+            } or None,
         )
 
     elif req.content_type == "gbp_post":
@@ -180,6 +226,126 @@ def generate_draft(
     return item
 
 
+def _run_batch(
+    user_id: int,
+    client_db_id: int,
+    photo_ids: list[int],
+    blog_count: int,
+    platforms: list[str],
+):
+    """Generate a batch in the background, one item at a time.
+
+    Runs off-request because a full batch is several Claude calls and would sit
+    well past a proxy's read timeout. Each draft commits as it finishes, so the
+    queue fills progressively and one failure does not discard the rest.
+    """
+    from core.content_generator import pick_blog_keywords, recent_blog_keywords
+    from ..database import SessionLocal
+    from ..models import Client
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        client_row = db.query(Client).filter(Client.id == client_db_id).first()
+        if not user or not client_row:
+            logger.error("Batch generation: user %s or client %s vanished", user_id, client_db_id)
+            return
+
+        for photo_id in photo_ids:
+            try:
+                generate_draft(
+                    GenerateDraftRequest(
+                        content_type="social_caption",
+                        media_item_id=photo_id,
+                        platforms=platforms,
+                        client_id=client_db_id,
+                    ),
+                    current_user=user,
+                    db=db,
+                )
+            except Exception as e:
+                db.rollback()
+                logger.error("Batch generation: social draft for photo %s failed: %s", photo_id, e)
+
+        # Each blog gets its own keyword, chosen up front and skipping anything
+        # recent posts already targeted. Listing previous titles and asking for
+        # something different is not enough on its own — it yields a fresh title
+        # on the same subject.
+        keywords = pick_blog_keywords(
+            client_row.client_id,
+            blog_count,
+            exclude=recent_blog_keywords(db, client_db_id),
+        )
+        for n, keyword in enumerate(keywords):
+            try:
+                generate_draft(
+                    GenerateDraftRequest(
+                        content_type="blog_post",
+                        client_id=client_db_id,
+                        focus_keyword=keyword,
+                    ),
+                    current_user=user,
+                    db=db,
+                )
+            except Exception as e:
+                db.rollback()
+                logger.error("Batch generation: blog draft %s (%s) failed: %s", n + 1, keyword, e)
+
+        logger.info("Batch generation finished for client %s", client_db_id)
+    finally:
+        db.close()
+
+
+@router.post("/generate-batch", response_model=GenerateBatchResponse)
+def generate_batch(
+    req: GenerateBatchRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Queue a run of blog drafts plus multi-platform social drafts."""
+    from core.config_loader import load_client_config
+    from core.media_rotation import next_photos
+    from ..models import Client
+
+    if current_user.role == "admin" and req.client_id:
+        client_db_id = req.client_id
+    elif current_user.client_id:
+        client_db_id = current_user.client_id
+    else:
+        raise HTTPException(status_code=400, detail="No client context")
+
+    client_row = db.query(Client).filter(Client.id == client_db_id).first()
+    if not client_row:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    config = load_client_config(client_row.client_id)
+
+    # Claim the photos up front so the drafts cannot land on the same one — they
+    # are only excluded from the rotation once a content item points at them.
+    photos = next_photos(db, config, client_db_id, req.social_count)
+    if not photos and req.social_count:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No unused photos left in this client's library",
+        )
+
+    background_tasks.add_task(
+        _run_batch,
+        user_id=current_user.id,
+        client_db_id=client_db_id,
+        photo_ids=[p.id for p in photos],
+        blog_count=req.blog_count,
+        platforms=req.platforms,
+    )
+
+    return GenerateBatchResponse(
+        blog_count=req.blog_count,
+        social_count=len(photos),
+        platforms=req.platforms,
+    )
+
+
 @router.get("/", response_model=list[ContentItemResponse])
 def list_pending(
     client_id: Optional[int] = None,
@@ -189,7 +355,8 @@ def list_pending(
 ):
     """
     Admins see all content items (filterable by status).
-    Clients see items in client_review (sent to them for approval).
+    Clients see what is with them plus what they just approved, so an approved
+    item stays on screen (and undoable) rather than vanishing until it publishes.
     """
     if current_user.role == "admin":
         query = db.query(ContentItem)
@@ -203,11 +370,55 @@ def list_pending(
     else:
         client_ids = current_user.client_ids
         query = db.query(ContentItem).filter(
-            ContentItem.status == ContentStatus.client_review,
+            ContentItem.status.in_(CLIENT_VISIBLE_STATUSES),
             ContentItem.client_id.in_(client_ids),
         )
 
     return query.order_by(ContentItem.created_at.desc()).all()
+
+
+@router.get("/published", response_model=list[PublishedItemResponse])
+def list_published(
+    client_id: Optional[int] = None,
+    limit: int = 200,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Everything that has gone live, however it got there."""
+    query = db.query(ContentItem).filter(ContentItem.status == ContentStatus.published)
+
+    if current_user.role == "admin":
+        if client_id:
+            query = query.filter(ContentItem.client_id == client_id)
+    else:
+        query = query.filter(ContentItem.client_id.in_(current_user.client_ids))
+
+    items = (
+        query.order_by(ContentItem.published_at.desc(), ContentItem.id.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+
+    results = []
+    for item in items:
+        approver = item.approved_by
+        results.append(PublishedItemResponse(
+            id=item.id,
+            client_id=item.client_id,
+            content_type=item.content_type,
+            platform=item.platform,
+            title=item.title,
+            body=item.body,
+            image_url=item.image_url,
+            published_at=item.published_at,
+            approved_at=item.approved_at,
+            meta=item.meta,
+            published_via="auto" if approver is None else approver.role.value,
+            approved_by_name=approver.name if approver else None,
+        ))
+    return results
 
 
 @router.delete("/{item_id}")
@@ -240,6 +451,32 @@ def recall_item(
     if item.status != ContentStatus.client_review:
         raise HTTPException(status_code=400, detail="Item is not in client review")
     item.status = ContentStatus.pending_approval
+    item.auto_publish_at = None
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.post("/{item_id}/undo-approval", response_model=ContentItemResponse)
+def undo_approval(
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Pull an approved item back into review. Only works before it publishes."""
+    item = _get_item(item_id, current_user, db)
+    if item.status not in UNDOABLE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This item has already published"
+            if item.status == ContentStatus.published
+            else f"Item cannot be undone (current status: {item.status.value})",
+        )
+
+    item.status = ContentStatus.client_review
+    item.approved_by_id = None
+    item.approved_at = None
+    item.scheduled_for = None
     db.commit()
     db.refresh(item)
     return item
@@ -265,6 +502,44 @@ def send_to_client(
         )
     item.status = ContentStatus.client_review
     item.rejection_reason = None  # clear any previous rejection note
+    if item.content_type == ContentType.blog_post:
+        item.auto_publish_at = datetime.now(timezone.utc) + timedelta(days=BLOG_REVIEW_WINDOW_DAYS)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.patch("/{item_id}", response_model=ContentItemResponse)
+def update_item(
+    item_id: int,
+    payload: UpdateContentRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Save edits without deciding on the item. Does not touch the review clock."""
+    item = _get_item(item_id, current_user, db)
+
+    # Clients may only edit while the item is actually with them.
+    if current_user.role != "admin" and item.status != ContentStatus.client_review:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This item is no longer open for edits",
+        )
+    if current_user.role == "admin" and item.status in {
+        ContentStatus.published, ContentStatus.scheduled
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot edit an item that is {item.status.value}",
+        )
+
+    if payload.title is not None:
+        item.title = payload.title
+    if payload.body is not None:
+        item.body = payload.body
+    if payload.image_url is not None:
+        item.image_url = payload.image_url or None
+
     db.commit()
     db.refresh(item)
     return item
@@ -280,7 +555,14 @@ def approve_item(
 ):
     item = _get_item(item_id, current_user, db)
 
-    approvable = {ContentStatus.pending_approval, ContentStatus.client_review, ContentStatus.rejected}
+    # failed is approvable so a post that errored on publish can be retried:
+    # approving puts it back in front of the publish sweep.
+    approvable = {
+        ContentStatus.pending_approval,
+        ContentStatus.client_review,
+        ContentStatus.rejected,
+        ContentStatus.failed,
+    }
     if item.status not in approvable:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -297,6 +579,10 @@ def approve_item(
     item.status = ContentStatus.approved
     item.approved_by_id = current_user.id
     item.approved_at = datetime.now(timezone.utc)
+    # Clear the previous failure so a retry does not keep showing a stale error.
+    item.error_message = None
+    # auto_publish_at is left intact so undoing restores the original deadline
+    # rather than granting a fresh window. The auto-publish job is status-gated.
     db.commit()
     db.refresh(item)
 
@@ -410,6 +696,7 @@ def reject_item(
 
     item.status = ContentStatus.rejected
     item.rejection_reason = payload.reason
+    item.auto_publish_at = None
     db.commit()
     db.refresh(item)
     return item
@@ -498,7 +785,8 @@ def _maybe_publish_now(item_id: int):
             return
 
         # Only publish if no future schedule date
-        if item.scheduled_for and item.scheduled_for > now:
+        scheduled_for = _as_utc(item.scheduled_for)
+        if scheduled_for and scheduled_for > now:
             return
 
         from portal.api.models import Client

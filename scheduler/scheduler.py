@@ -5,14 +5,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from core.config_loader import load_all_clients, ClientConfig
-from core.content_generator import (
-    generate_blog_draft,
-    generate_gbp_post,
-    generate_captions_from_image,
-)
-from core.email_notifier import send_content_ready
+from core.media_rotation import GBP_GALLERY_KEY, next_photo
 from portal.api.database import SessionLocal
-from portal.api.models import ContentItem, ContentType, ContentStatus, Platform, MediaItem
+from portal.api.models import ContentItem, ContentType, ContentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +16,21 @@ scheduler = BackgroundScheduler(timezone="UTC")
 
 # ── Job functions ─────────────────────────────────────────────────────────────
 
-def generate_social_captions_job(client_id: str):
-    """Generate weekly social posts from media library using Claude vision."""
+# Content generation is no longer scheduled. Blog posts and social captions are
+# produced on demand from the portal — see the generate endpoints in
+# portal/api/routes/approvals.py. The GBP gallery upload below is the only
+# content the scheduler still creates by itself.
+
+
+def upload_gbp_photo_job(client_id: str):
+    """Add one photo to the client's Google Business Profile gallery.
+
+    Google is deliberately not part of the weekly caption run. It gets a gallery
+    photo rather than an Update, so this draws from the same rotation and posts
+    the image on its own.
+    """
     from core.config_loader import load_client_config
+    from core.publer_publisher import upload_gbp_photo
     from datetime import datetime, timezone
 
     config = load_client_config(client_id)
@@ -31,130 +38,63 @@ def generate_social_captions_job(client_id: str):
 
     try:
         db_client_id = _get_db_client_id(db, client_id)
-
-        # Pick least-recently-used media item (null last_used_at = never used, comes first)
-        from sqlalchemy import nullsfirst
-        media_item = (
-            db.query(MediaItem)
-            .filter(MediaItem.client_id == db_client_id)
-            .order_by(nullsfirst(MediaItem.last_used_at.asc()))
-            .first()
-        )
-
-        if not media_item:
-            logger.warning(f"[{client_id}] No media items in library — skipping weekly captions")
+        photo = next_photo(db, config, db_client_id)
+        if not photo:
+            logger.warning(f"[{client_id}] No eligible photo — skipping GBP gallery upload")
             return
 
-        captions = generate_captions_from_image(
-            config=config,
-            image_path=media_item.url,
-            image_filename=media_item.filename,
-            image_meta=media_item.meta,
-        )
+        # Google shows this as the photo's description. The project name is the
+        # only text here; there is no caption to write.
+        description = (photo.meta or {}).get("project") or ""
+        upload_gbp_photo(config, image_url=photo.url, description=description)
 
-        platform_map = {
-            "instagram": Platform.instagram,
-            "facebook": Platform.facebook,
-            "linkedin": Platform.linkedin,
-            "gbp": Platform.gbp,
-        }
-
-        total = 0
-        for platform_key, platform_enum in platform_map.items():
-            caption_text = captions.get(platform_key, "")
-            if not caption_text:
-                continue
-            item = ContentItem(
-                client_id=db_client_id,
-                content_type=ContentType.social_caption,
-                platform=platform_enum,
-                status=ContentStatus.pending_approval,
-                body=caption_text,
-                image_url=media_item.url,
-            )
-            db.add(item)
-            total += 1
-
-        media_item.last_used_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        photo.last_used_at = now
+        # Reassign rather than mutate — SQLAlchemy does not track in-place edits
+        # to a JSON column, so a mutated dict would never persist.
+        photo.meta = {**(photo.meta or {}), GBP_GALLERY_KEY: now.isoformat()}
         db.commit()
-        logger.info(f"[{client_id}] Generated {total} platform captions from image {media_item.filename}")
-
-        send_content_ready(
-            to=config.notifications.client_email,
-            brand_name=config.brand_name,
-            count=total,
-        )
+        logger.info(f"[{client_id}] Uploaded {photo.filename} to GBP gallery")
 
     except Exception as e:
-        logger.error(f"[{client_id}] Social caption generation failed: {e}")
+        logger.error(f"[{client_id}] GBP gallery upload failed: {e}")
         db.rollback()
     finally:
         db.close()
 
 
-def generate_blog_draft_job(client_id: str):
-    """Generate a monthly blog draft and queue for approval."""
-    from core.config_loader import load_client_config
-    config = load_client_config(client_id)
+# A standalone weekly GBP *post* job used to live here, writing a text-only
+# Update. It was removed: it duplicated the caption job's GBP output, and Google
+# now gets a gallery photo instead. Admins can still generate a one-off GBP post
+# from the portal, which calls generate_gbp_post directly.
+
+
+def auto_publish_expired_reviews_job(client_id: str):
+    """Approve client_review items whose review window has closed."""
+    from datetime import datetime, timezone
+
     db = SessionLocal()
-
+    now = datetime.now(timezone.utc)
     try:
-        draft = generate_blog_draft(config)
-        item = ContentItem(
-            client_id=_get_db_client_id(db, client_id),
-            content_type=ContentType.blog_post,
-            status=ContentStatus.pending_approval,
-            title=draft["title"],
-            body=draft["body"],
-        )
-        db.add(item)
-        db.commit()
-        logger.info(f"[{client_id}] Generated blog draft: {draft['title']}")
+        db_client_id = _get_db_client_id(db, client_id)
+        items = db.query(ContentItem).filter(
+            ContentItem.client_id == db_client_id,
+            ContentItem.status == ContentStatus.client_review,
+            ContentItem.auto_publish_at.isnot(None),
+            ContentItem.auto_publish_at <= now,
+        ).all()
 
-        send_content_ready(
-            to=config.notifications.client_email,
-            brand_name=config.brand_name,
-            count=1,
-        )
-
+        for item in items:
+            item.status = ContentStatus.approved
+            item.approved_at = now
+            item.auto_publish_at = None
+            logger.info(f"[{client_id}] Review window closed — auto-approved item {item.id}")
+        if items:
+            db.commit()
     except Exception as e:
-        logger.error(f"[{client_id}] Blog draft generation failed: {e}")
-        db.rollback()
+        logger.error(f"[{client_id}] auto_publish_expired_reviews_job failed: {e}")
     finally:
         db.close()
-
-
-def generate_gbp_post_job(client_id: str):
-    """Generate a GBP post and queue for approval."""
-    from core.config_loader import load_client_config
-    config = load_client_config(client_id)
-    db = SessionLocal()
-
-    try:
-        post = generate_gbp_post(config)
-        item = ContentItem(
-            client_id=_get_db_client_id(db, client_id),
-            content_type=ContentType.gbp_post,
-            platform=Platform.gbp,
-            status=ContentStatus.pending_approval,
-            body=post,
-        )
-        db.add(item)
-        db.commit()
-        logger.info(f"[{client_id}] Generated GBP post")
-
-        send_content_ready(
-            to=config.notifications.client_email,
-            brand_name=config.brand_name,
-            count=1,
-        )
-
-    except Exception as e:
-        logger.error(f"[{client_id}] GBP post generation failed: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
 
 
 def publish_approved_content_job(client_id: str):
@@ -374,30 +314,24 @@ def register_client_jobs(config: ClientConfig):
     cid = config.client_id
     sched = config.schedule  # noqa: F841 — used below for day-of-month settings
 
-    # Social captions — every Monday at 06:00 UTC
-    scheduler.add_job(
-        generate_social_captions_job,
-        CronTrigger(day_of_week="mon", hour=6, minute=0),
-        args=[cid],
-        id=f"{cid}_social_captions",
-        replace_existing=True,
-    )
 
-    # Blog draft — 1st of each month at 07:00 UTC
-    scheduler.add_job(
-        generate_blog_draft_job,
-        CronTrigger(day=1, hour=7, minute=0),
-        args=[cid],
-        id=f"{cid}_blog_draft",
-        replace_existing=True,
-    )
 
-    # GBP posts — every 7 days (weekly), Monday at 08:00 UTC
+    # GBP gallery photo — Mondays at 08:00 UTC. Runs after the caption job so that
+    # job's photo is already claimed and cannot be picked again here.
     scheduler.add_job(
-        generate_gbp_post_job,
+        upload_gbp_photo_job,
         CronTrigger(day_of_week="mon", hour=8, minute=0),
         args=[cid],
-        id=f"{cid}_gbp_post",
+        id=f"{cid}_gbp_photo",
+        replace_existing=True,
+    )
+
+    # Close expired client review windows — hourly, just before the publish sweep
+    scheduler.add_job(
+        auto_publish_expired_reviews_job,
+        CronTrigger(minute=10),
+        args=[cid],
+        id=f"{cid}_auto_publish_expired",
         replace_existing=True,
     )
 

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 from .models import ContentType, ContentStatus, Platform, UserRole, ReviewPlatform, ReviewSentiment
 
@@ -79,7 +79,11 @@ class ContentItemResponse(BaseModel):
     image_url: Optional[str]
     scheduled_for: Optional[datetime]
     published_at: Optional[datetime]
+    auto_publish_at: Optional[datetime] = None
     rejection_reason: Optional[str] = None
+    # Why a publish attempt failed. Without this the UI can show that something
+    # went wrong but not what, which is the only actionable part.
+    error_message: Optional[str] = None
     meta: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
@@ -97,13 +101,52 @@ class RejectContentRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class UpdateContentRequest(BaseModel):
+    title: Optional[str] = None
+    body: Optional[str] = None
+    image_url: Optional[str] = None
+
+
 class GenerateDraftRequest(BaseModel):
     content_type: str          # social_caption | blog_post | gbp_post
     platform: Optional[str] = None          # legacy single-platform
     platforms: Optional[list[str]] = None   # multi-platform: ["instagram", "facebook", ...]
     media_item_id: Optional[int] = None
     topic: Optional[str] = None
+    focus_keyword: Optional[str] = None   # blog only: the search term to build the post around
     client_id: Optional[int] = None  # admin override
+
+
+class GenerateBatchRequest(BaseModel):
+    """A run of drafts. Defaults are one month's worth."""
+    client_id: Optional[int] = None  # admin override
+    blog_count: int = Field(2, ge=0, le=8)
+    social_count: int = Field(4, ge=0, le=20)   # photos; each yields one multi-platform draft
+    platforms: list[str] = ["instagram", "facebook", "linkedin"]
+
+
+class GenerateBatchResponse(BaseModel):
+    """What was queued. Drafts arrive over the following minutes."""
+    blog_count: int
+    social_count: int
+    platforms: list[str]
+
+
+class PublishedItemResponse(BaseModel):
+    id: int
+    client_id: int
+    content_type: ContentType
+    platform: Optional[Platform]
+    title: Optional[str]
+    body: str
+    image_url: Optional[str]
+    published_at: Optional[datetime]
+    approved_at: Optional[datetime]
+    meta: Optional[dict] = None
+    # "auto" when the review window closed without client action, otherwise
+    # whoever approved it. Derived — approved_by_id is NULL only for the job.
+    published_via: str
+    approved_by_name: Optional[str] = None
 
 
 # ── Assets ────────────────────────────────────────────────────────────────────
