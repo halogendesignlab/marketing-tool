@@ -184,6 +184,54 @@ def _fetch_and_upload(
         return None
 
 
+def _classify_drive_files(
+    client_id: str,
+    drive_files: list[dict],
+    existing_urls: set,
+    existing_filenames: set,
+    filename_to_meta: dict,
+) -> tuple[list[dict], list[tuple[str, dict]]]:
+    """Split a Drive scan into files to import and existing files needing metadata.
+
+    At most one file per filename is imported. The recursive scan returns a photo
+    once per folder it is filed in, and the R2 key is only client/filename, so
+    without this two copies import as two rows pointing at one object — which is
+    how the library came to hold 108 duplicates.
+
+    Where copies collide the filed one wins over an unfiled one: folder-derived
+    category is what keeps each brand posting its own work, so letting an unfiled
+    copy win would quietly drop the photo out of rotation.
+    """
+    chosen: dict[str, dict] = {}
+    to_backfill: list[tuple[str, dict]] = []
+
+    for f in drive_files:
+        filename = f["name"]
+        meta = _extract_metadata(f.get("_folder_path", []))
+
+        if f"drive://{f['id']}" in existing_urls or filename in existing_filenames:
+            if filename_to_meta.get(filename) is None and meta:
+                to_backfill.append((filename, meta))
+            continue
+
+        kept = chosen.get(filename)
+        if kept is None:
+            chosen[filename] = f
+            continue
+
+        # Keep whichever copy carries metadata; on a tie the first one stays.
+        loser = f if _extract_metadata(kept.get("_folder_path", [])) or not meta else kept
+        if loser is kept:
+            chosen[filename] = f
+        logger.warning(
+            f"[{client_id}] '{filename}' appears more than once in Drive — keeping "
+            f"{'/'.join(chosen[filename].get('_folder_path', [])) or 'unfiled'}, skipping "
+            f"{'/'.join(loser.get('_folder_path', [])) or 'unfiled'}"
+        )
+
+    return list(chosen.values()), to_backfill
+
+
 def sync_drive_to_media_library(config: ClientConfig, db_client_id: int, db) -> int:
     """
     Sync Drive images into the MediaItem table, resizing to 1080px and uploading to R2.
@@ -231,22 +279,9 @@ def sync_drive_to_media_library(config: ClientConfig, db_client_id: int, db) -> 
 
     logger.info(f"[{config.client_id}] R2 configured — uploading with {UPLOAD_WORKERS} parallel workers (resize to {MAX_IMAGE_DIMENSION}px)")
 
-    # Separate files into: needs import vs needs metadata backfill vs skip
-    to_import = []
-    to_backfill = []
-
-    for f in drive_files:
-        filename = f["name"]
-        drive_url = f"drive://{f['id']}"
-        folder_path = f.get("_folder_path", [])
-        meta = _extract_metadata(folder_path)
-
-        if drive_url in existing_urls or filename in existing_filenames:
-            # Already imported — backfill metadata if missing
-            if filename in filename_to_meta and filename_to_meta[filename] is None and meta:
-                to_backfill.append((filename, meta))
-        else:
-            to_import.append(f)
+    to_import, to_backfill = _classify_drive_files(
+        config.client_id, drive_files, existing_urls, existing_filenames, filename_to_meta
+    )
 
     logger.info(f"[{config.client_id}] {len(to_import)} to import, {len(to_backfill)} to backfill metadata, {len(drive_files) - len(to_import) - len(to_backfill)} already up to date")
 
