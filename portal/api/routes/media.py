@@ -360,6 +360,84 @@ def drive_preview(
         raise HTTPException(status_code=404, detail=f"Could not fetch Drive file: {e}")
 
 
+def _attachment_header(filename: str) -> str:
+    """Content-Disposition that forces a download and survives odd filenames.
+
+    Library filenames come from Drive and contain spaces, and occasionally
+    characters a bare quoted filename would break on. The ASCII fallback keeps
+    old clients working; filename* carries the real name.
+    """
+    from urllib.parse import quote
+
+    name = Path(filename or "photo.jpg").name.replace("\r", "").replace("\n", "")
+    fallback = "".join(c if 32 <= ord(c) < 127 and c not in '"\\' else "_" for c in name)
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(name)}"
+
+
+@router.get("/items/{item_id}/download")
+def download_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return a library photo as a file download.
+
+    Goes through the API rather than linking the image directly: photos live on
+    R2, a different origin from the portal, and browsers ignore the download
+    attribute on cross-origin links — they open the image instead of saving it.
+    """
+    from fastapi.responses import Response
+
+    item = db.query(MediaItem).filter(MediaItem.id == item_id).first()
+    # Clients may only reach their own library; a 404 rather than a 403 so ids
+    # belonging to other clients are not confirmed to exist.
+    if not item or (
+        current_user.role != UserRole.admin and item.client_id != _client_id_for(current_user, db)
+    ):
+        raise HTTPException(status_code=404, detail="Media item not found")
+
+    mime_type = item.mime_type or "image/jpeg"
+
+    try:
+        if item.url.startswith("/uploads/"):
+            local = (UPLOADS_DIR / item.url.removeprefix("/uploads/")).resolve()
+            if not local.is_relative_to(UPLOADS_DIR.resolve()) or not local.is_file():
+                raise FileNotFoundError(item.url)
+            data = local.read_bytes()
+
+        elif item.url.startswith("drive://"):
+            from core.drive_watcher import get_file_bytes
+            data, mime_type = get_file_bytes(item.url.removeprefix("drive://"))
+
+        elif item.url.startswith(("https://", "http://")):
+            import httpx
+            from ..settings import get_settings
+
+            # Only fetch from our own bucket. The server makes this request, so an
+            # arbitrary stored URL would let it be pointed anywhere.
+            r2 = get_settings().R2_PUBLIC_URL.rstrip("/")
+            if not r2 or not item.url.startswith(r2 + "/"):
+                raise FileNotFoundError(item.url)
+            resp = httpx.get(item.url, timeout=60)
+            resp.raise_for_status()
+            data = resp.content
+            mime_type = resp.headers.get("content-type", mime_type).split(";")[0]
+
+        else:
+            raise FileNotFoundError(item.url)
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Photo file not found")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not fetch photo: {e}")
+
+    return Response(
+        content=data,
+        media_type=mime_type,
+        headers={"Content-Disposition": _attachment_header(item.filename)},
+    )
+
+
 @router.delete("/items/{item_id}")
 def delete_item(
     item_id: int,

@@ -222,6 +222,25 @@ export async function getMediaItems(folderId?: number | null, clientId?: number,
   return res.data;
 }
 
+/** Saves a library photo to the user's device.
+ *
+ *  Fetched as a blob rather than linked: the endpoint needs the auth header,
+ *  which a plain link cannot send, and linking the R2 image directly would open
+ *  it instead — browsers ignore `download` on cross-origin URLs. A blob URL is
+ *  same-origin, so the attribute holds. */
+export async function downloadMediaItem(item: { id: number; filename: string }) {
+  const res = await api.get(`/api/media/items/${item.id}/download`, { responseType: "blob" });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = item.filename || "photo.jpg";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoking straight away can cancel the save in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 export async function getMediaItemCount(folderId?: number | null, clientId?: number, filters: MediaFilters = {}) {
   const params: Record<string, string | number> = {};
   if (folderId != null) params.folder_id = folderId;

@@ -16,6 +16,7 @@ import {
   uploadMediaToLibrary,
   deleteMediaItem,
   moveMediaItem,
+  downloadMediaItem,
   type MediaFilters,
 } from "@/lib/api";
 import toast from "react-hot-toast";
@@ -520,7 +521,19 @@ function MediaCard({
   onMove: (item: MediaItem, folderId: number | null) => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const token = Cookies.get("token") ?? "";
+
+  const download = async () => {
+    setDownloading(true);
+    try {
+      await downloadMediaItem(item);
+    } catch {
+      toast.error("Download failed");
+    } finally {
+      setDownloading(false);
+    }
+  };
   const src = item.url.startsWith("drive://")
     ? `${API_BASE}/api/media/drive-preview/${item.url.replace("drive://", "")}?token=${token}`
     : item.url.startsWith("http")
@@ -540,6 +553,15 @@ function MediaCard({
       {/* Overlay on hover */}
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-colors duration-150 flex flex-col justify-between p-2 opacity-0 group-hover:opacity-100">
         <div className="flex justify-end gap-1">
+          <button
+            onClick={download}
+            disabled={downloading}
+            className="bg-ink-800 border border-ink-600 rounded-md w-6 h-6 flex items-center justify-center text-fg-2 hover:text-fg-1 text-xs transition-colors duration-150 disabled:opacity-60"
+            title="Download"
+            aria-label={`Download ${item.filename}`}
+          >
+            {downloading ? "…" : "↓"}
+          </button>
           <button
             onClick={() => setShowMenu(!showMenu)}
             className="bg-ink-800 border border-ink-600 rounded-md w-6 h-6 flex items-center justify-center text-fg-2 hover:text-fg-1 text-xs transition-colors duration-150"
