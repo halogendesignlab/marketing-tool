@@ -79,10 +79,27 @@ def load_keywords(client_id: str) -> list[dict]:
         except Exception as e:
             logger.warning(f"[{client_id}] Failed to load keyword file {csv_path.name}: {e}")
 
+    # Drop topics this client does not take on. Filtered here, at the only place
+    # keywords are read, because filtering downstream missed a path: the single
+    # post generator passes the raw list to the model as background, and a banned
+    # term with the highest volume on the list is exactly what it picks.
+    banned = _excluded_keywords(client_id)
+    if banned:
+        rows = [r for r in rows if not any(b in r["keyword"].lower() for b in banned)]
+
     # Sort: High > Med > Low, then by volume desc
     priority_order = {"High": 0, "Med": 1, "Low": 2}
     rows.sort(key=lambda r: (priority_order.get(r["priority"], 3), -r["volume"]))
     return rows
+
+
+def _excluded_keywords(client_id: str) -> list[str]:
+    """Lowercased excluded_keywords from the client config, or none if unreadable."""
+    try:
+        from .config_loader import load_client_config
+        return [b.lower() for b in (load_client_config(client_id).excluded_keywords or [])]
+    except Exception:
+        return []
 
 
 # Low-priority terms are kept out of the blog tier. The research usually flags them

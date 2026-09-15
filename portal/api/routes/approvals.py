@@ -134,11 +134,23 @@ def generate_draft(
         media_item.last_used_at = datetime.now(timezone.utc)
 
     elif req.content_type == "blog_post":
+        from core.content_generator import pick_blog_keywords, recent_blog_keywords
+
+        # With no topic and no keyword, the model used to choose freely from the
+        # keyword list — and reliably chose the highest-volume term every time.
+        # Assign one the same way a batch does: sampled, skipping recent ones.
+        focus_keyword = req.focus_keyword or None
+        if not focus_keyword and not req.topic:
+            picks = pick_blog_keywords(
+                client_row.client_id, 1, exclude=recent_blog_keywords(db, client_db_id)
+            )
+            focus_keyword = picks[0] if picks else None
+
         draft = generate_blog_draft(
             config,
             topic=req.topic or None,
             recent_titles=recent_blog_titles(db, client_db_id),
-            focus_keyword=req.focus_keyword or None,
+            focus_keyword=focus_keyword,
         )
 
         # Select images from the media library that best match the article
@@ -207,7 +219,7 @@ def generate_draft(
             # focus_keyword is recorded so later runs can pick a different one.
             meta={
                 **({"blog_images": blog_image_urls} if blog_image_urls else {}),
-                **({"focus_keyword": req.focus_keyword} if req.focus_keyword else {}),
+                **({"focus_keyword": focus_keyword} if focus_keyword else {}),
             } or None,
         )
 

@@ -134,20 +134,11 @@ def pick_blog_keywords(client_id: str, count: int, exclude: set[str] | None = No
     """
     import random
 
-    from .config_loader import load_client_config
     from .keyword_loader import get_blog_keywords
 
     exclude = {e.lower() for e in (exclude or set())}
-
-    try:
-        banned = [b.lower() for b in (load_client_config(client_id).excluded_keywords or [])]
-    except Exception:
-        banned = []
-
-    ranked = [
-        k["keyword"] for k in get_blog_keywords(client_id, max_keywords=40)
-        if not any(b in k["keyword"].lower() for b in banned)
-    ]
+    # excluded_keywords are already gone — load_keywords drops them at the source.
+    ranked = [k["keyword"] for k in get_blog_keywords(client_id, max_keywords=40)]
 
     fresh = [k for k in ranked if k.lower() not in exclude]
     if len(fresh) >= count:
