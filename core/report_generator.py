@@ -93,30 +93,20 @@ def generate_monthly_report(
         }
 
         # ── SERP (latest stored results for this period) ──────────────────────
-        # Ordered by keyword so the map packs appear in the same sequence in
-        # every report. Without an explicit order the database returns these
-        # rows however it likes, and that order can change between runs — so a
-        # client comparing two months found the same keywords in new positions.
-        serp_results = db.query(SerpResult).filter(
-            SerpResult.client_id == client.id,
-            SerpResult.period_year == year,
-            SerpResult.period_month == month,
-        ).order_by(SerpResult.keyword).all()
+        # Scans are keyed by the month they were taken in, and a keyword is not
+        # necessarily scanned every month. Each report shows the most recent
+        # scan at or before its period, carrying one forward when there is
+        # nothing newer — labelled with the date it was actually taken, and
+        # flagged so the page can say the figure is not from this month.
+        period_key = year * 12 + month
+        month_key = SerpResult.period_year * 12 + SerpResult.period_month
 
-        prev_month = month - 1 if month > 1 else 12
-        prev_year = year if month > 1 else year - 1
-
-        # The engagement baseline: the earliest scan on record for this client.
-        # Everything is measured against it so the report can show what the work
-        # has achieved overall, not just since last month.
-        baseline = db.query(SerpResult).filter(
-            SerpResult.client_id == client.id,
-        ).order_by(SerpResult.period_year, SerpResult.period_month).first()
-        baseline_year = baseline.period_year if baseline else None
-        baseline_month = baseline.period_month if baseline else None
-        # A baseline that is the month being reported is not a comparison.
-        if (baseline_year, baseline_month) == (year, month):
-            baseline_year = baseline_month = None
+        def _scan_at_or_before(keyword: str, before_key: int) -> SerpResult | None:
+            return db.query(SerpResult).filter(
+                SerpResult.client_id == client.id,
+                SerpResult.keyword == keyword,
+                month_key <= before_key,
+            ).order_by(month_key.desc(), SerpResult.id.desc()).first()
 
         def _first_scan_for(keyword: str) -> SerpResult | None:
             """A keyword's own earliest scan. The tracked set changes over time,
@@ -124,18 +114,36 @@ def generate_monthly_report(
             return db.query(SerpResult).filter(
                 SerpResult.client_id == client.id,
                 SerpResult.keyword == keyword,
-            ).order_by(SerpResult.period_year, SerpResult.period_month).first()
+            ).order_by(month_key, SerpResult.id).first()
+
+        # Ordered by keyword so the map packs appear in the same sequence in
+        # every report. Without an explicit order the database returns these
+        # rows however it likes, and that order can change between runs — so a
+        # client comparing two months found the same keywords in new positions.
+        tracked = sorted(
+            k for (k,) in db.query(SerpResult.keyword)
+            .filter(SerpResult.client_id == client.id).distinct().all()
+        )
+
+        # The engagement baseline: the earliest scan on record for this client.
+        baseline = db.query(SerpResult).filter(
+            SerpResult.client_id == client.id,
+        ).order_by(month_key, SerpResult.id).first()
+        baseline_year = baseline.period_year if baseline else None
+        baseline_month = baseline.period_month if baseline else None
+        # A baseline that is the month being reported is not a comparison.
+        if (baseline_year, baseline_month) == (year, month):
+            baseline_year = baseline_month = None
 
         serp_section = []
-        for sr in serp_results:
-            # Newest first, so a keyword scanned more than once in a month
-            # compares against the same scan every time this is rebuilt.
-            prev_serp = db.query(SerpResult).filter(
-                SerpResult.client_id == client.id,
-                SerpResult.keyword == sr.keyword,
-                SerpResult.period_year == prev_year,
-                SerpResult.period_month == prev_month,
-            ).order_by(SerpResult.id.desc()).first()
+        for keyword in tracked:
+            sr = _scan_at_or_before(keyword, period_key)
+            if not sr:
+                continue  # first scanned after this report's period
+
+            sr_key = sr.period_year * 12 + sr.period_month
+            # The scan before the one being shown, whenever that was taken.
+            prev_serp = _scan_at_or_before(keyword, sr_key - 1)
             grid_with_trends = compute_rank_trends(
                 sr.grid_data,
                 prev_serp.grid_data if prev_serp else None,
@@ -143,12 +151,12 @@ def generate_monthly_report(
 
             # Compare against this keyword's own first scan, which may be later
             # than the client's baseline if it was added to the tracked set.
-            base_serp = _first_scan_for(sr.keyword)
-            if base_serp and (base_serp.period_year, base_serp.period_month) == (year, month):
+            base_serp = _first_scan_for(keyword)
+            if base_serp and base_serp.id == sr.id:
                 base_serp = None
 
             serp_section.append({
-                "keyword": sr.keyword,
+                "keyword": keyword,
                 "grid_data": attach_baseline_ranks(
                     grid_with_trends,
                     base_serp.grid_data if base_serp else None,
@@ -156,6 +164,11 @@ def generate_monthly_report(
                 # When the scan was actually taken, so the report can say so
                 # rather than implying every figure is from this month.
                 "scanned_at": sr.checked_at.isoformat() if sr.checked_at else None,
+                "is_current": sr_key == period_key,
+                "prev_scanned_at": (
+                    prev_serp.checked_at.isoformat()
+                    if prev_serp and prev_serp.checked_at else None
+                ),
                 "baseline_scanned_at": (
                     base_serp.checked_at.isoformat()
                     if base_serp and base_serp.checked_at else None

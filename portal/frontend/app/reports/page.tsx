@@ -44,6 +44,17 @@ interface GscData {
   baseline_total_impressions?: number;
 }
 
+interface SerpEntry {
+  keyword: string;
+  grid_data: GridPoint[];
+  /** When the scan behind these numbers was actually taken. */
+  scanned_at?: string | null;
+  /** False when no scan ran in the report's own month and this is carried forward. */
+  is_current?: boolean;
+  prev_scanned_at?: string | null;
+  baseline_scanned_at?: string | null;
+}
+
 interface GridPoint {
   lat: number;
   lng: number;
@@ -84,7 +95,7 @@ interface ReportData {
     inconsistent: number;
     by_directory: Record<string, { consistent: boolean | null; issues: string[] }>;
   };
-  serp?: Array<{ keyword: string; grid_data: GridPoint[] }>;
+  serp?: SerpEntry[];
   serp_history?: Record<string, SerpKeywordHistory>;
   /** The month every "since we started" comparison measures back to. */
   baseline?: { year: number; month: number } | null;
@@ -310,7 +321,7 @@ function SerpSummaryStrip({
   serp,
   baseline,
 }: {
-  serp: Array<{ keyword: string; grid_data: GridPoint[] }>;
+  serp: SerpEntry[];
   baseline?: { year: number; month: number } | null;
 }) {
   const since = baselineShort(baseline);
@@ -393,10 +404,14 @@ function SerpSummaryStrip({
 function GeoGrid({
   keyword,
   gridData,
+  scannedAt,
+  isCurrent,
   baseline,
 }: {
   keyword: string;
   gridData: GridPoint[];
+  scannedAt?: string | null;
+  isCurrent?: boolean;
   baseline?: { year: number; month: number } | null;
 }) {
   const since = baselineShort(baseline);
@@ -415,7 +430,17 @@ function GeoGrid({
       <div className="flex items-start justify-between mb-4">
         <div>
           <p className="text-sm font-sans font-semibold text-fg-1">&ldquo;{keyword}&rdquo;</p>
-          <p className="text-xs text-fg-3 font-sans mt-0.5">{gridData.length}-point geo-grid · Google Maps</p>
+          <p className="text-xs text-fg-3 font-sans mt-0.5">
+            {gridData.length}-point geo-grid · Google Maps
+          </p>
+          {scannedAt && (
+            <p className={`text-[11px] font-sans mt-0.5 ${isCurrent === false ? "text-signal-warn" : "text-fg-3"}`}>
+              {isCurrent === false ? "No scan this month · last scanned " : "Scanned "}
+              {new Date(scannedAt).toLocaleDateString("en-US", {
+                month: "short", day: "numeric", year: "numeric",
+              })}
+            </p>
+          )}
         </div>
         <div className="flex gap-4 text-right">
           {avgRank && (
@@ -866,6 +891,8 @@ export default function ReportsPage() {
                       key={s.keyword}
                       keyword={s.keyword}
                       gridData={s.grid_data}
+                      scannedAt={s.scanned_at}
+                      isCurrent={s.is_current}
                       baseline={d.baseline}
                     />
                   ))}
