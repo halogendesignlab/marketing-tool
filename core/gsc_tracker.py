@@ -64,6 +64,25 @@ def _site_totals(service, site_url: str, start: date, end: date) -> tuple[int, i
     return int(rows[0].get("clicks", 0)), int(rows[0].get("impressions", 0))
 
 
+def get_site_totals_for_month(config: ClientConfig, month: int, year: int) -> dict:
+    """Site-wide clicks and impressions for one month, or {} if unavailable.
+
+    Used for the engagement baseline, which sits further back than the
+    month-over-month comparison get_search_analytics already returns.
+    """
+    if not config.gsc or not settings.GOOGLE_SERVICE_ACCOUNT_FILE:
+        return {}
+    try:
+        service = _gsc_service()
+    except Exception as e:
+        logger.error(f"[{config.client_id}] Failed to build GSC service: {e}")
+        return {}
+
+    start, end = _month_range(year, month)
+    clicks, impressions = _site_totals(service, config.gsc.site_url, start, end)
+    return {"clicks": clicks, "impressions": impressions}
+
+
 def get_search_analytics(config: ClientConfig, month: int, year: int) -> dict:
     """
     Pull Search Console analytics for the given month.

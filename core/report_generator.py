@@ -3,8 +3,8 @@
 import logging
 from datetime import datetime, timezone
 from .config_loader import ClientConfig
-from .serp_tracker_localfalcon import compute_rank_trends
-from .gsc_tracker import get_search_analytics
+from .serp_tracker_localfalcon import attach_baseline_ranks, compute_rank_trends
+from .gsc_tracker import get_search_analytics, get_site_totals_for_month
 from portal.api.database import SessionLocal
 from portal.api.models import (
     Report, ContentItem, ContentStatus, ContentType,
@@ -106,6 +106,18 @@ def generate_monthly_report(
         prev_month = month - 1 if month > 1 else 12
         prev_year = year if month > 1 else year - 1
 
+        # The engagement baseline: the earliest scan on record for this client.
+        # Everything is measured against it so the report can show what the work
+        # has achieved overall, not just since last month.
+        baseline = db.query(SerpResult).filter(
+            SerpResult.client_id == client.id,
+        ).order_by(SerpResult.period_year, SerpResult.period_month).first()
+        baseline_year = baseline.period_year if baseline else None
+        baseline_month = baseline.period_month if baseline else None
+        # A baseline that is the month being reported is not a comparison.
+        if (baseline_year, baseline_month) == (year, month):
+            baseline_year = baseline_month = None
+
         serp_section = []
         for sr in serp_results:
             # Newest first, so a keyword scanned more than once in a month
@@ -120,9 +132,22 @@ def generate_monthly_report(
                 sr.grid_data,
                 prev_serp.grid_data if prev_serp else None,
             )
+
+            base_serp = None
+            if baseline_year:
+                base_serp = db.query(SerpResult).filter(
+                    SerpResult.client_id == client.id,
+                    SerpResult.keyword == sr.keyword,
+                    SerpResult.period_year == baseline_year,
+                    SerpResult.period_month == baseline_month,
+                ).order_by(SerpResult.id.desc()).first()
+
             serp_section.append({
                 "keyword": sr.keyword,
-                "grid_data": grid_with_trends,
+                "grid_data": attach_baseline_ranks(
+                    grid_with_trends,
+                    base_serp.grid_data if base_serp else None,
+                ),
             })
 
         # ── Organic rankings (DataForSEO — disabled, replaced by GSC) ────────
@@ -132,6 +157,13 @@ def generate_monthly_report(
         gsc_section = {}
         try:
             gsc_section = get_search_analytics(config, month, year)
+            # Search figures from the baseline month, for the since-inception
+            # comparison. Skipped when the baseline is the month being reported.
+            if gsc_section and baseline_year:
+                base = get_site_totals_for_month(config, baseline_month, baseline_year)
+                if base:
+                    gsc_section["baseline_total_clicks"] = base["clicks"]
+                    gsc_section["baseline_total_impressions"] = base["impressions"]
         except Exception as e:
             logger.warning(f"[{config.client_id}] GSC analytics failed: {e}")
 
@@ -176,6 +208,12 @@ def generate_monthly_report(
             "serp_history": serp_history,
             "serp_organic": organic_section,
             "gsc": gsc_section,
+            # Which month everything is compared back to, so the report can name
+            # it rather than saying "since inception" without evidence.
+            "baseline": (
+                {"year": baseline_year, "month": baseline_month}
+                if baseline_year else None
+            ),
         }
 
         # Upsert — replace existing report for same period if present

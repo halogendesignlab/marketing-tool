@@ -40,6 +40,8 @@ interface GscData {
   total_impressions: number;
   prev_total_clicks: number;
   prev_total_impressions: number;
+  baseline_total_clicks?: number;
+  baseline_total_impressions?: number;
 }
 
 interface GridPoint {
@@ -48,9 +50,10 @@ interface GridPoint {
   rank: number | null;
   prev_rank?: number | null;
   change?: number | null;
+  /** Rank at the engagement baseline — the earliest scan on record. */
+  baseline_rank?: number | null;
 }
 
-type SerpPeriod = "30d" | "120d" | "1y";
 
 interface SerpSnapshot {
   timestamp: number;
@@ -83,6 +86,8 @@ interface ReportData {
   };
   serp?: Array<{ keyword: string; grid_data: GridPoint[] }>;
   serp_history?: Record<string, SerpKeywordHistory>;
+  /** The month every "since we started" comparison measures back to. */
+  baseline?: { year: number; month: number } | null;
   gsc?: GscData;
 }
 
@@ -134,20 +139,39 @@ function MetricCard({
   label,
   value,
   delta,
+  deltaNote,
+  secondaryDelta,
+  secondaryNote,
   hint,
 }: {
   label: string;
   value: string | number;
+  /** Headline change — the engagement baseline, when there is one. */
   delta?: string | null;
+  deltaNote?: string;
+  /** Quieter second line, normally the change against last month. */
+  secondaryDelta?: string | null;
+  secondaryNote?: string;
   hint?: string;
 }) {
+  const tone = (d: string) => (d.startsWith("+") ? "text-signal-good" : "text-signal-bad");
+
   return (
     <div className="bg-ink-700 rounded-xl border border-ink-600 p-5">
       <p className="text-xs font-sans font-medium text-fg-3 uppercase tracking-widest mb-2">{label}</p>
       <p className="text-3xl font-sans font-semibold text-fg-1 leading-none">{value}</p>
-      {(delta || hint) && (
-        <p className={`text-xs font-sans mt-2 ${delta ? (delta.startsWith("+") ? "text-signal-good" : "text-signal-bad") : "text-fg-3"}`}>
-          {delta ?? hint}
+      {delta ? (
+        <p className={`text-xs font-sans mt-2 font-medium ${tone(delta)}`}>
+          {delta}
+          {deltaNote && <span className="text-fg-3 font-normal"> {deltaNote}</span>}
+        </p>
+      ) : hint ? (
+        <p className="text-xs font-sans mt-2 text-fg-3">{hint}</p>
+      ) : null}
+      {secondaryDelta && (
+        <p className={`text-[11px] font-sans mt-1 ${tone(secondaryDelta)}`}>
+          {secondaryDelta}
+          {secondaryNote && <span className="text-fg-3"> {secondaryNote}</span>}
         </p>
       )}
     </div>
@@ -180,8 +204,6 @@ function rankColor(rank: number | null): string {
   return "bg-signal-bad text-white";
 }
 
-const PERIOD_LABELS: Record<SerpPeriod, string> = { "30d": "30 days", "120d": "120 days", "1y": "1 year" };
-const PERIOD_KEY_MAP: Record<SerpPeriod, keyof SerpKeywordHistory> = { "30d": "30d", "120d": "120d", "1y": "365d" };
 
 /** Rank stats for one keyword, this month against last, from the stored scan.
  *
@@ -194,30 +216,56 @@ const PERIOD_KEY_MAP: Record<SerpPeriod, keyof SerpKeywordHistory> = { "30d": "3
 function gridStats(grid: GridPoint[]) {
   const ranked = grid.filter((p) => p.rank !== null);
   const prevRanked = grid.filter((p) => p.prev_rank != null);
+  const baseRanked = grid.filter((p) => p.baseline_rank != null);
   const mean = (ns: number[]) => (ns.length ? ns.reduce((a, b) => a + b, 0) / ns.length : null);
 
   return {
     avgRank: mean(ranked.map((p) => p.rank as number)),
     prevAvgRank: mean(prevRanked.map((p) => p.prev_rank as number)),
+    baseAvgRank: mean(baseRanked.map((p) => p.baseline_rank as number)),
     rankedCount: ranked.length,
     prevRankedCount: prevRanked.length,
+    baseRankedCount: baseRanked.length,
     top3: ranked.filter((p) => (p.rank as number) <= 3).length,
     prevTop3: prevRanked.filter((p) => (p.prev_rank as number) <= 3).length,
+    baseTop3: baseRanked.filter((p) => (p.baseline_rank as number) <= 3).length,
     // A keyword the business does not appear for anywhere would otherwise drag
     // every average toward Local Falcon's not-found value.
     isRanking: ranked.length > 0,
     hasPrev: prevRanked.length > 0,
+    hasBaseline: baseRanked.length > 0,
   };
 }
 
-function serpDelta(current: number | null, prev: number | null, invert = false): React.ReactNode {
+/** Month name for the baseline, so the report can say what it compares against. */
+function baselineLabel(baseline?: { year: number; month: number } | null): string {
+  if (!baseline) return "since we started";
+  return `since ${MONTH_NAMES[baseline.month]} ${baseline.year}`;
+}
+
+function serpDelta(
+  current: number | null,
+  prev: number | null,
+  invert = false,
+  note?: string,
+  quiet = false,
+): React.ReactNode {
   if (current === null || prev === null) return null;
   const diff = current - prev;
-  if (Math.abs(diff) < 0.05) return <span className="text-xs text-fg-3 font-sans">No change</span>;
+  const size = quiet ? "text-[11px]" : "text-xs";
+  if (Math.abs(diff) < 0.05) {
+    return (
+      <span className={`${size} text-fg-3 font-sans`}>
+        No change{note ? ` ${note}` : ""}
+      </span>
+    );
+  }
+  // Rank is better when lower, so improvement direction is per-metric.
   const improved = invert ? diff < 0 : diff > 0;
   return (
-    <span className={`text-xs font-sans font-medium ${improved ? "text-signal-good" : "text-signal-bad"}`}>
+    <span className={`${size} font-sans ${quiet ? "" : "font-medium"} ${improved ? "text-signal-good" : "text-signal-bad"}`}>
       {improved ? "↑" : "↓"} {Math.abs(diff).toFixed(1)}
+      {note && <span className="text-fg-3 font-normal"> {note}</span>}
     </span>
   );
 }
@@ -226,12 +274,14 @@ function SerpStatCell({
   label,
   value,
   delta,
+  secondary,
   description,
   insufficient,
 }: {
   label: string;
   value: string;
   delta?: React.ReactNode;
+  secondary?: React.ReactNode;
   description: string;
   insufficient?: boolean;
 }) {
@@ -244,6 +294,7 @@ function SerpStatCell({
           <span className="text-[10px] text-fg-3 italic font-sans">Insufficient data</span>
         ) : delta ? delta : <span className="text-xs text-fg-3">—</span>}
       </div>
+      {secondary && <div className="h-4 flex items-center">{secondary}</div>}
       <p className="text-[11px] text-fg-3 font-sans mt-1 leading-snug">{description}</p>
     </div>
   );
@@ -251,13 +302,12 @@ function SerpStatCell({
 
 function SerpSummaryStrip({
   serp,
-  history,
-  period,
+  baseline,
 }: {
   serp: Array<{ keyword: string; grid_data: GridPoint[] }>;
-  history: Record<string, SerpKeywordHistory> | undefined;
-  period: SerpPeriod;
+  baseline?: { year: number; month: number } | null;
 }) {
+  const since = baselineLabel(baseline);
   // Everything here comes from the stored scans, the same source as the grids
   // below, so the summary and the grids can no longer disagree.
   const stats = serp.map((s) => gridStats(s.grid_data));
@@ -272,6 +322,8 @@ function SerpSummaryStrip({
   // rather than counted at the not-found value.
   const avgArp = mean(ranking.map((s) => s.avgRank));
   const prevAvgArp = mean(ranking.filter((s) => s.hasPrev).map((s) => s.prevAvgRank));
+  const baseAvgArp = mean(ranking.filter((s) => s.hasBaseline).map((s) => s.baseAvgRank));
+  const hasBaseline = stats.some((s) => s.hasBaseline);
 
   const totalPoints = serp.reduce((n, s) => n + s.grid_data.length, 0);
   const prevTotalPoints = serp.reduce(
@@ -297,8 +349,17 @@ function SerpSummaryStrip({
         <SerpStatCell
           label="Avg Rank"
           value={avgArp !== null ? avgArp.toFixed(1) : "—"}
-          delta={hasPrevData ? serpDelta(avgArp, prevAvgArp, true) : undefined}
-          insufficient={!hasPrevData}
+          delta={
+            hasBaseline
+              ? serpDelta(avgArp, baseAvgArp, true, since)
+              : hasPrevData ? serpDelta(avgArp, prevAvgArp, true, "vs last month") : undefined
+          }
+          secondary={
+            hasBaseline && hasPrevData
+              ? serpDelta(avgArp, prevAvgArp, true, "vs last month", true)
+              : undefined
+          }
+          insufficient={!hasPrevData && !hasBaseline}
           description={
             notRanking > 0
               ? `Across ${ranking.length} ranking keyword${ranking.length === 1 ? "" : "s"} · ${notRanking} not ranking`
@@ -308,7 +369,7 @@ function SerpSummaryStrip({
         <SerpStatCell
           label="Top 3"
           value={avgSolv !== null ? `${avgSolv.toFixed(1)}%` : "—"}
-          delta={hasPrevData ? serpDelta(avgSolv, prevAvgSolv) : undefined}
+          delta={hasPrevData ? serpDelta(avgSolv, prevAvgSolv, false, "vs last month") : undefined}
           insufficient={!hasPrevData}
           description="Share of the grid holding a top-3 position"
         />
@@ -326,14 +387,13 @@ function SerpSummaryStrip({
 function GeoGrid({
   keyword,
   gridData,
-  history,
-  period,
+  baseline,
 }: {
   keyword: string;
   gridData: GridPoint[];
-  history?: SerpKeywordHistory;
-  period: SerpPeriod;
+  baseline?: { year: number; month: number } | null;
 }) {
+  const since = baselineLabel(baseline);
   const stats = gridStats(gridData);
   const hasPrev = stats.hasPrev;
 
@@ -412,19 +472,28 @@ function GeoGrid({
           <p className="text-xs font-sans font-medium text-fg-3 uppercase tracking-widest mb-1">Avg rank</p>
           <p className="text-xl font-sans font-semibold text-fg-1">{avgRank ?? "—"}</p>
           <div className="h-4 flex items-center mt-0.5">
-            {!hasPrev
-              ? <span className="text-[10px] text-fg-3 italic font-sans">No prior scan</span>
-              : serpDelta(stats.avgRank, stats.prevAvgRank, true) ?? <span className="text-xs text-fg-3">—</span>}
+            {stats.hasBaseline
+              ? serpDelta(stats.avgRank, stats.baseAvgRank, true, since) ?? <span className="text-xs text-fg-3">—</span>
+              : hasPrev
+                ? serpDelta(stats.avgRank, stats.prevAvgRank, true, "vs last month") ?? <span className="text-xs text-fg-3">—</span>
+                : <span className="text-[10px] text-fg-3 italic font-sans">No prior scan</span>}
           </div>
+          {stats.hasBaseline && hasPrev && (
+            <div className="h-4 flex items-center">
+              {serpDelta(stats.avgRank, stats.prevAvgRank, true, "vs last month", true)}
+            </div>
+          )}
           <p className="text-[11px] text-fg-3 font-sans mt-1">Across ranked grid points</p>
         </div>
         <div className="flex-1 flex flex-col items-center text-center px-3">
           <p className="text-xs font-sans font-medium text-fg-3 uppercase tracking-widest mb-1">Top 3</p>
           <p className="text-xl font-sans font-semibold text-fg-1">{top3}</p>
           <div className="h-4 flex items-center mt-0.5">
-            {!hasPrev
-              ? <span className="text-[10px] text-fg-3 italic font-sans">No prior scan</span>
-              : serpDelta(stats.top3, stats.prevTop3) ?? <span className="text-xs text-fg-3">—</span>}
+            {stats.hasBaseline
+              ? serpDelta(stats.top3, stats.baseTop3, false, since) ?? <span className="text-xs text-fg-3">—</span>
+              : hasPrev
+                ? serpDelta(stats.top3, stats.prevTop3, false, "vs last month") ?? <span className="text-xs text-fg-3">—</span>
+                : <span className="text-[10px] text-fg-3 italic font-sans">No prior scan</span>}
           </div>
           <p className="text-[11px] text-fg-3 font-sans mt-1">Grid points in the top 3</p>
         </div>
@@ -434,9 +503,11 @@ function GeoGrid({
             {stats.rankedCount} / {gridData.length}
           </p>
           <div className="h-4 flex items-center mt-0.5">
-            {!hasPrev
-              ? <span className="text-[10px] text-fg-3 italic font-sans">No prior scan</span>
-              : serpDelta(stats.rankedCount, stats.prevRankedCount) ?? <span className="text-xs text-fg-3">—</span>}
+            {stats.hasBaseline
+              ? serpDelta(stats.rankedCount, stats.baseRankedCount, false, since) ?? <span className="text-xs text-fg-3">—</span>
+              : hasPrev
+                ? serpDelta(stats.rankedCount, stats.prevRankedCount, false, "vs last month") ?? <span className="text-xs text-fg-3">—</span>
+                : <span className="text-[10px] text-fg-3 italic font-sans">No prior scan</span>}
           </div>
           <p className="text-[11px] text-fg-3 font-sans mt-1">Grid points ranked at all</p>
         </div>
@@ -445,7 +516,8 @@ function GeoGrid({
   );
 }
 
-function SearchPerformance({ gsc }: { gsc: GscData }) {
+function SearchPerformance({ gsc, baseline }: { gsc: GscData; baseline?: { year: number; month: number } | null }) {
+  const since = baselineLabel(baseline);
   const hasQueries = gsc.top_queries.length > 0;
   const hasPages = gsc.top_pages.length > 0;
   const avgPos = avgPosition(gsc.top_queries);
@@ -457,13 +529,35 @@ function SearchPerformance({ gsc }: { gsc: GscData }) {
         <MetricCard
           label="Organic clicks"
           value={gsc.total_clicks.toLocaleString()}
-          delta={pctDelta(gsc.total_clicks, gsc.prev_total_clicks) ?? undefined}
+          delta={
+            gsc.baseline_total_clicks
+              ? pctDelta(gsc.total_clicks, gsc.baseline_total_clicks) ?? undefined
+              : pctDelta(gsc.total_clicks, gsc.prev_total_clicks) ?? undefined
+          }
+          deltaNote={gsc.baseline_total_clicks ? since : "vs last month"}
+          secondaryDelta={
+            gsc.baseline_total_clicks
+              ? pctDelta(gsc.total_clicks, gsc.prev_total_clicks) ?? undefined
+              : undefined
+          }
+          secondaryNote="vs last month"
           hint={gsc.prev_total_clicks === 0 ? "No prior data" : undefined}
         />
         <MetricCard
           label="Impressions"
           value={gsc.total_impressions.toLocaleString()}
-          delta={pctDelta(gsc.total_impressions, gsc.prev_total_impressions) ?? undefined}
+          delta={
+            gsc.baseline_total_impressions
+              ? pctDelta(gsc.total_impressions, gsc.baseline_total_impressions) ?? undefined
+              : pctDelta(gsc.total_impressions, gsc.prev_total_impressions) ?? undefined
+          }
+          deltaNote={gsc.baseline_total_impressions ? since : "vs last month"}
+          secondaryDelta={
+            gsc.baseline_total_impressions
+              ? pctDelta(gsc.total_impressions, gsc.prev_total_impressions) ?? undefined
+              : undefined
+          }
+          secondaryNote="vs last month"
           hint={gsc.prev_total_impressions === 0 ? "No prior data" : undefined}
         />
         <MetricCard
@@ -666,7 +760,6 @@ export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [selected, setSelected] = useState<Report | null>(null);
   const [fetching, setFetching] = useState(true);
-  const [serpPeriod, setSerpPeriod] = useState<SerpPeriod>("30d");
 
   useEffect(() => {
     if (!user || !selectedClient) return;
@@ -747,7 +840,7 @@ export default function ReportsPage() {
                 sub="Organic search data via Google Search Console"
               />
               {d.gsc && d.gsc.top_queries && (d.gsc.top_queries.length > 0 || d.gsc.total_impressions > 0) ? (
-                <SearchPerformance gsc={d.gsc} />
+                <SearchPerformance gsc={d.gsc} baseline={d.baseline} />
               ) : (
                 <EmptyState message="Search Console data will appear here once Google has indexed the site and collected enough data." />
               )}
@@ -756,36 +849,18 @@ export default function ReportsPage() {
             {/* Geo-grid */}
             {d.serp && d.serp.length > 0 && (
               <section>
-                <div className="flex items-center justify-between mb-4">
-                  <SectionHeader
-                    title="Local map rankings"
-                    sub="Google Maps rank across geographic grid points"
-                  />
-                  <div className="flex items-center gap-1 bg-ink-700 border border-ink-600 rounded-md p-1 text-xs font-sans font-medium">
-                    {(["30d", "120d", "1y"] as SerpPeriod[]).map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => setSerpPeriod(p)}
-                        className={`px-3 py-1 rounded-md transition-colors duration-150 ${
-                          serpPeriod === p
-                            ? "bg-ink-500 text-fg-1"
-                            : "text-fg-3 hover:text-fg-2"
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <SerpSummaryStrip serp={d.serp} history={d.serp_history} period={serpPeriod} />
+                <SectionHeader
+                  title="Local map rankings"
+                  sub="Google Maps rank across geographic grid points"
+                />
+                <SerpSummaryStrip serp={d.serp} baseline={d.baseline} />
                 <div className="grid grid-cols-2 gap-4">
                   {d.serp.map((s) => (
                     <GeoGrid
                       key={s.keyword}
                       keyword={s.keyword}
                       gridData={s.grid_data}
-                      history={d.serp_history?.[s.keyword]}
-                      period={serpPeriod}
+                      baseline={d.baseline}
                     />
                   ))}
                 </div>

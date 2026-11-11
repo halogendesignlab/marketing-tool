@@ -166,6 +166,23 @@ def get_latest_scans(api_key: str, place_id: str) -> list[dict]:
     return results
 
 
+def attach_baseline_ranks(
+    grid: list[dict],
+    baseline_grid: list[dict] | None,
+) -> list[dict]:
+    """Add `baseline_rank` to each point, from the engagement's first scan.
+
+    Matched on coordinates like compute_rank_trends, so a grid whose points are
+    stored in a different order still lines up. Separate from prev_rank: one
+    answers "since last month", the other "since we started".
+    """
+    if not baseline_grid:
+        return [{**pt, "baseline_rank": None} for pt in grid]
+
+    lookup = {(p["lat"], p["lng"]): p.get("rank") for p in baseline_grid}
+    return [{**pt, "baseline_rank": lookup.get((pt["lat"], pt["lng"]))} for pt in grid]
+
+
 def compute_rank_trends(
     current_grid: list[dict],
     previous_grid: list[dict] | None,
