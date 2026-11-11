@@ -124,6 +124,16 @@ def generate_monthly_report(
             k for (k,) in db.query(SerpResult.keyword)
             .filter(SerpResult.client_id == client.id).distinct().all()
         )
+        # Retired keywords keep their stored scans but drop out of the report.
+        wanted = {k.lower() for k in (config.serp_keywords or [])}
+        if wanted:
+            missing = wanted - {k.lower() for k in tracked}
+            if missing:
+                logger.warning(
+                    f"[{config.client_id}] serp_keywords lists {len(missing)} keyword(s) "
+                    f"with no scan on record: {', '.join(sorted(missing))}"
+                )
+            tracked = [k for k in tracked if k.lower() in wanted]
 
         # The engagement baseline: the earliest scan on record for this client.
         baseline = db.query(SerpResult).filter(

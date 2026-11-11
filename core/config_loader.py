@@ -112,6 +112,10 @@ class ClientConfig(BaseModel):
     # typically work they don't actually take on. Matched case-insensitively as a
     # substring, so "church" blocks "church construction cost" too.
     excluded_keywords: list[str] = []
+    # Map-pack keywords the report shows, matched case-insensitively. Scans for
+    # other keywords are still stored, just not reported — so retiring a keyword
+    # here is reversible and does not destroy its history. Empty = show all.
+    serp_keywords: list[str] = []
     directories_to_monitor: list[str] = ["google", "yelp", "bbb", "yellowpages", "bing"]
     schedule: ScheduleConfig = ScheduleConfig()
     notifications: NotificationsConfig
