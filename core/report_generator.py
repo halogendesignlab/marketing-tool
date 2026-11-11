@@ -93,23 +93,29 @@ def generate_monthly_report(
         }
 
         # ── SERP (latest stored results for this period) ──────────────────────
+        # Ordered by keyword so the map packs appear in the same sequence in
+        # every report. Without an explicit order the database returns these
+        # rows however it likes, and that order can change between runs — so a
+        # client comparing two months found the same keywords in new positions.
         serp_results = db.query(SerpResult).filter(
             SerpResult.client_id == client.id,
             SerpResult.period_year == year,
             SerpResult.period_month == month,
-        ).all()
+        ).order_by(SerpResult.keyword).all()
 
         prev_month = month - 1 if month > 1 else 12
         prev_year = year if month > 1 else year - 1
 
         serp_section = []
         for sr in serp_results:
+            # Newest first, so a keyword scanned more than once in a month
+            # compares against the same scan every time this is rebuilt.
             prev_serp = db.query(SerpResult).filter(
                 SerpResult.client_id == client.id,
                 SerpResult.keyword == sr.keyword,
                 SerpResult.period_year == prev_year,
                 SerpResult.period_month == prev_month,
-            ).first()
+            ).order_by(SerpResult.id.desc()).first()
             grid_with_trends = compute_rank_trends(
                 sr.grid_data,
                 prev_serp.grid_data if prev_serp else None,
