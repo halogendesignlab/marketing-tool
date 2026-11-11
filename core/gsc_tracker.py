@@ -48,6 +48,22 @@ def _query_analytics(service, site_url: str, start: date, end: date, dimensions:
         return []
 
 
+def _site_totals(service, site_url: str, start: date, end: date) -> tuple[int, int]:
+    """True site-wide clicks and impressions for the period.
+
+    A query with no dimensions returns one aggregate row covering the whole
+    site. Summing the top-N query rows instead undercounts badly — the list is
+    cut at the requested limit, and Google withholds low-volume queries
+    altogether, so the long tail never appears. Measured against October for
+    moorhouse-homes: 66 real clicks and 1,061 impressions versus 32 and 200
+    from the top 20 queries.
+    """
+    rows = _query_analytics(service, site_url, start, end, [], row_limit=1)
+    if not rows:
+        return 0, 0
+    return int(rows[0].get("clicks", 0)), int(rows[0].get("impressions", 0))
+
+
 def get_search_analytics(config: ClientConfig, month: int, year: int) -> dict:
     """
     Pull Search Console analytics for the given month.
@@ -76,9 +92,11 @@ def get_search_analytics(config: ClientConfig, month: int, year: int) -> dict:
 
     logger.info(f"[{config.client_id}] Pulling GSC data for {site_url} ({cur_start} to {cur_end})")
 
-    # Top queries this month
+    # Top queries this month. The previous month is pulled deeper because it is
+    # only a lookup table for per-query comparison — a query ranked 15th now may
+    # have sat well below 20th last month.
     cur_query_rows = _query_analytics(service, site_url, cur_start, cur_end, ["query"], row_limit=20)
-    prev_query_rows = _query_analytics(service, site_url, prev_start, prev_end, ["query"], row_limit=50)
+    prev_query_rows = _query_analytics(service, site_url, prev_start, prev_end, ["query"], row_limit=200)
 
     # Build prev lookup by query
     prev_by_query = {row["keys"][0]: row for row in prev_query_rows}
@@ -108,12 +126,12 @@ def get_search_analytics(config: ClientConfig, month: int, year: int) -> dict:
             "position": round(row.get("position", 0), 1),
         })
 
-    # Site totals (no dimension = aggregate)
-    # GSC doesn't support 0-dimension queries directly; sum from query rows
-    total_clicks = sum(r.get("clicks", 0) for r in cur_query_rows)
-    total_impressions = sum(r.get("impressions", 0) for r in cur_query_rows)
-    prev_total_clicks = sum(r.get("clicks", 0) for r in prev_query_rows)
-    prev_total_impressions = sum(r.get("impressions", 0) for r in prev_query_rows)
+    # Site totals, measured the same way for both months so the comparison is
+    # like for like. These used to be sums of the top query rows — 20 for this
+    # month against 50 for last — which both undercounted the totals and
+    # compared two differently sized lists.
+    total_clicks, total_impressions = _site_totals(service, site_url, cur_start, cur_end)
+    prev_total_clicks, prev_total_impressions = _site_totals(service, site_url, prev_start, prev_end)
 
     return {
         "site_url": site_url,
