@@ -32,15 +32,25 @@ def _next_period(year: int, month: int) -> tuple[int, int]:
 
 
 def _is_empty(report: Report) -> bool:
-    """True when nothing was actually measured — a mid-month manual run."""
+    """True when nothing was actually measured — a mid-month manual run.
+
+    A SERP section is not evidence on its own. A mid-month run still writes the
+    keyword grid, just with every rank null, so the ranks are what count rather
+    than the presence of the section.
+    """
     data = report.data or {}
     gsc = data.get("gsc") or {}
     content = data.get("content") or {}
+    ranked = any(
+        point.get("rank") is not None
+        for entry in (data.get("serp") or [])
+        for point in (entry.get("grid_data") or [])
+    )
     return (
         not gsc.get("top_queries")
         and not gsc.get("total_clicks")
         and not content.get("total_published")
-        and not (data.get("serp") or [])
+        and not ranked
     )
 
 
