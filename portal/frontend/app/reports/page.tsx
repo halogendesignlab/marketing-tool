@@ -6,8 +6,7 @@ import { useClient } from "@/lib/client-context";
 import { useRequireClient } from "@/lib/use-require-client";
 import { useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
-import { getReportList, triggerReport } from "@/lib/api";
-import toast from "react-hot-toast";
+import { getReportList } from "@/lib/api";
 
 const MONTH_NAMES = [
   "", "January", "February", "March", "April", "May", "June",
@@ -632,7 +631,7 @@ function DirectorySection({ directories }: { directories: NonNullable<ReportData
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
   const { selectedClient } = useClient();
   const router = useRouter();
   const ready = useRequireClient();
@@ -640,7 +639,6 @@ export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [selected, setSelected] = useState<Report | null>(null);
   const [fetching, setFetching] = useState(true);
-  const [generating, setGenerating] = useState(false);
   const [serpPeriod, setSerpPeriod] = useState<SerpPeriod>("30d");
 
   useEffect(() => {
@@ -655,19 +653,6 @@ export default function ReportsPage() {
       })
       .finally(() => setFetching(false));
   }, [user, selectedClient]);
-
-  const handleGenerate = async () => {
-    if (!selectedClient) return;
-    setGenerating(true);
-    try {
-      await triggerReport(undefined, undefined, selectedClient.id);
-      toast.success("Generating report — refresh in ~30 seconds");
-    } catch {
-      toast.error("Failed to trigger report");
-    } finally {
-      setGenerating(false);
-    }
-  };
 
   if (!ready) return null;
 
@@ -706,15 +691,6 @@ export default function ReportsPage() {
                 ))}
               </select>
             )}
-            {isAdmin && (
-              <button
-                onClick={handleGenerate}
-                disabled={generating}
-                className="btn-primary disabled:opacity-50"
-              >
-                {generating ? "Generating…" : "Generate now"}
-              </button>
-            )}
           </div>
         </div>
 
@@ -726,16 +702,11 @@ export default function ReportsPage() {
 
         {!fetching && reports.length === 0 && (
           <div className="bg-ink-700 rounded-xl border border-ink-600 p-16 text-center">
-            <p className="text-fg-3 font-sans text-sm mb-4">No reports generated yet.</p>
-            {isAdmin && (
-              <button
-                onClick={handleGenerate}
-                disabled={generating}
-                className="btn-primary disabled:opacity-50"
-              >
-                {generating ? "Generating…" : "Generate first report"}
-              </button>
-            )}
+            <p className="text-fg-3 font-sans text-sm">No reports yet.</p>
+            <p className="text-fg-3 font-sans text-sm mt-1">
+              Reports generate on their own at the start of each month, covering the month
+              just finished.
+            </p>
           </div>
         )}
 
