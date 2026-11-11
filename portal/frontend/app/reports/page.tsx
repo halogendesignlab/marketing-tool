@@ -183,6 +183,33 @@ function rankColor(rank: number | null): string {
 const PERIOD_LABELS: Record<SerpPeriod, string> = { "30d": "30 days", "120d": "120 days", "1y": "1 year" };
 const PERIOD_KEY_MAP: Record<SerpPeriod, keyof SerpKeywordHistory> = { "30d": "30d", "120d": "120d", "1y": "365d" };
 
+/** Rank stats for one keyword, this month against last, from the stored scan.
+ *
+ *  The grid each report stores carries `rank` and `prev_rank` on every point,
+ *  so both sides of the comparison are already here. The KPIs used to read
+ *  Local Falcon's live history instead, which always returns its most recent
+ *  scan — so every month's report showed the same frozen number while the grid
+ *  beside it moved.
+ */
+function gridStats(grid: GridPoint[]) {
+  const ranked = grid.filter((p) => p.rank !== null);
+  const prevRanked = grid.filter((p) => p.prev_rank != null);
+  const mean = (ns: number[]) => (ns.length ? ns.reduce((a, b) => a + b, 0) / ns.length : null);
+
+  return {
+    avgRank: mean(ranked.map((p) => p.rank as number)),
+    prevAvgRank: mean(prevRanked.map((p) => p.prev_rank as number)),
+    rankedCount: ranked.length,
+    prevRankedCount: prevRanked.length,
+    top3: ranked.filter((p) => (p.rank as number) <= 3).length,
+    prevTop3: prevRanked.filter((p) => (p.prev_rank as number) <= 3).length,
+    // A keyword the business does not appear for anywhere would otherwise drag
+    // every average toward Local Falcon's not-found value.
+    isRanking: ranked.length > 0,
+    hasPrev: prevRanked.length > 0,
+  };
+}
+
 function serpDelta(current: number | null, prev: number | null, invert = false): React.ReactNode {
   if (current === null || prev === null) return null;
   const diff = current - prev;
@@ -231,32 +258,38 @@ function SerpSummaryStrip({
   history: Record<string, SerpKeywordHistory> | undefined;
   period: SerpPeriod;
 }) {
-  const periodKey = PERIOD_KEY_MAP[period];
-  const snapshots = serp
-    .map((s) => history?.[s.keyword]?.current)
-    .filter(Boolean) as SerpSnapshot[];
-  const prevSnapshots = serp
-    .map((s) => (history?.[s.keyword]?.[periodKey] as SerpSnapshot | null) ?? null);
+  // Everything here comes from the stored scans, the same source as the grids
+  // below, so the summary and the grids can no longer disagree.
+  const stats = serp.map((s) => gridStats(s.grid_data));
+  const ranking = stats.filter((s) => s.isRanking);
 
-  const arps = snapshots.filter((s) => s.arp !== null).map((s) => s.arp as number);
-  const avgArp = arps.length ? arps.reduce((a, b) => a + b, 0) / arps.length : null;
+  const mean = (ns: (number | null)[]) => {
+    const vs = ns.filter((n): n is number => n !== null);
+    return vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+  };
 
-  const solvs = snapshots.map((s) => s.solv);
-  const avgSolv = solvs.length ? solvs.reduce((a, b) => a + b, 0) / solvs.length : null;
+  // Keywords the business does not rank for at all are left out of the average
+  // rather than counted at the not-found value.
+  const avgArp = mean(ranking.map((s) => s.avgRank));
+  const prevAvgArp = mean(ranking.filter((s) => s.hasPrev).map((s) => s.prevAvgRank));
 
-  const prevArps = prevSnapshots.filter((s): s is SerpSnapshot => s !== null && s.arp !== null).map((s) => s!.arp as number);
-  const prevAvgArp = prevArps.length ? prevArps.reduce((a, b) => a + b, 0) / prevArps.length : null;
-  const prevSolvs = prevSnapshots.filter((s): s is SerpSnapshot => s !== null).map((s) => s!.solv);
-  const prevAvgSolv = prevSolvs.length ? prevSolvs.reduce((a, b) => a + b, 0) / prevSolvs.length : null;
+  const totalPoints = serp.reduce((n, s) => n + s.grid_data.length, 0);
+  const prevTotalPoints = serp.reduce(
+    (n, s) => n + s.grid_data.filter((p) => p.prev_rank != null).length, 0,
+  );
+  const top3Now = stats.reduce((n, s) => n + s.top3, 0);
+  const top3Prev = stats.reduce((n, s) => n + s.prevTop3, 0);
 
-  const improving = serp.filter((s) => {
-    const cur = history?.[s.keyword]?.current;
-    const prv = history?.[s.keyword]?.[periodKey] as SerpSnapshot | null;
-    if (!cur || !prv || cur.arp === null || prv.arp === null) return false;
-    return cur.arp < prv.arp;
-  }).length;
+  // Share of the grid where the business holds a top-3 position.
+  const avgSolv = totalPoints ? (top3Now / totalPoints) * 100 : null;
+  const prevAvgSolv = prevTotalPoints ? (top3Prev / prevTotalPoints) * 100 : null;
 
-  const hasPrevData = prevSnapshots.some((s) => s !== null);
+  const improving = stats.filter(
+    (s) => s.hasPrev && s.avgRank !== null && s.prevAvgRank !== null && s.avgRank < s.prevAvgRank,
+  ).length;
+
+  const hasPrevData = stats.some((s) => s.hasPrev);
+  const notRanking = stats.length - ranking.length;
 
   return (
     <div className="bg-ink-700 rounded-xl border border-ink-600 mb-4">
@@ -266,20 +299,24 @@ function SerpSummaryStrip({
           value={avgArp !== null ? avgArp.toFixed(1) : "—"}
           delta={hasPrevData ? serpDelta(avgArp, prevAvgArp, true) : undefined}
           insufficient={!hasPrevData}
-          description="Average position across all keywords"
+          description={
+            notRanking > 0
+              ? `Across ${ranking.length} ranking keyword${ranking.length === 1 ? "" : "s"} · ${notRanking} not ranking`
+              : "Average position across ranking keywords"
+          }
         />
         <SerpStatCell
-          label="Avg SoLV"
+          label="Top 3"
           value={avgSolv !== null ? `${avgSolv.toFixed(1)}%` : "—"}
           delta={hasPrevData ? serpDelta(avgSolv, prevAvgSolv) : undefined}
           insufficient={!hasPrevData}
-          description="Share of local voice (#1 rankings)"
+          description="Share of the grid holding a top-3 position"
         />
         <SerpStatCell
           label="Improving"
           value={hasPrevData ? `${improving} / ${serp.length}` : "—"}
           insufficient={!hasPrevData}
-          description={`Keywords with better rank vs ${PERIOD_LABELS[period]} ago`}
+          description="Keywords with better rank than last month"
         />
       </div>
     </div>
@@ -297,20 +334,15 @@ function GeoGrid({
   history?: SerpKeywordHistory;
   period: SerpPeriod;
 }) {
-  const periodKey = PERIOD_KEY_MAP[period];
-  const cur = history?.current ?? null;
-  const prv = (history?.[periodKey] as SerpSnapshot | null) ?? null;
-  const hasPrev = prv !== null;
+  const stats = gridStats(gridData);
+  const hasPrev = stats.hasPrev;
 
   const n = Math.round(Math.sqrt(gridData.length));
   const rows: GridPoint[][] = [];
   for (let i = 0; i < gridData.length; i += n) rows.push(gridData.slice(i, i + n));
 
-  const ranked = gridData.filter((p) => p.rank !== null);
-  const avgRank = ranked.length
-    ? (ranked.reduce((s, p) => s + p.rank!, 0) / ranked.length).toFixed(1)
-    : null;
-  const top3 = ranked.filter((p) => p.rank! <= 3).length;
+  const avgRank = stats.avgRank !== null ? stats.avgRank.toFixed(1) : null;
+  const top3 = stats.top3;
 
   return (
     <div className="bg-ink-700 rounded-xl border border-ink-600 p-6">
@@ -331,7 +363,7 @@ function GeoGrid({
             <p className="text-xs text-fg-3 font-sans">top 3</p>
           </div>
           <div>
-            <p className="text-lg font-sans font-semibold text-fg-1">{ranked.length}/{gridData.length}</p>
+            <p className="text-lg font-sans font-semibold text-fg-1">{stats.rankedCount}/{gridData.length}</p>
             <p className="text-xs text-fg-3 font-sans">ranked</p>
           </div>
         </div>
@@ -374,46 +406,41 @@ function GeoGrid({
         ))}
       </div>
 
-      {/* ARP / SoLV / Coverage stats row */}
-      {cur && (
-        <div className="mt-4 pt-4 border-t border-ink-600 flex divide-x divide-ink-600">
-          {/* ARP */}
-          <div className="flex-1 flex flex-col items-center text-center px-3">
-            <p className="text-xs font-sans font-medium text-fg-3 uppercase tracking-widest mb-1">ARP</p>
-            <p className="text-xl font-sans font-semibold text-fg-1">
-              {cur.arp !== null ? cur.arp.toFixed(1) : "—"}
-            </p>
-            <div className="h-4 flex items-center mt-0.5">
-              {!hasPrev
-                ? <span className="text-[10px] text-fg-3 italic font-sans">Insufficient data</span>
-                : serpDelta(cur.arp, prv?.arp ?? null, true) ?? <span className="text-xs text-fg-3">—</span>}
-            </div>
-            <p className="text-[11px] text-fg-3 font-sans mt-1">Average rank position</p>
+      {/* Rank / top-3 / coverage, all from this month's scan against last month's */}
+      <div className="mt-4 pt-4 border-t border-ink-600 flex divide-x divide-ink-600">
+        <div className="flex-1 flex flex-col items-center text-center px-3">
+          <p className="text-xs font-sans font-medium text-fg-3 uppercase tracking-widest mb-1">Avg rank</p>
+          <p className="text-xl font-sans font-semibold text-fg-1">{avgRank ?? "—"}</p>
+          <div className="h-4 flex items-center mt-0.5">
+            {!hasPrev
+              ? <span className="text-[10px] text-fg-3 italic font-sans">No prior scan</span>
+              : serpDelta(stats.avgRank, stats.prevAvgRank, true) ?? <span className="text-xs text-fg-3">—</span>}
           </div>
-          {/* SoLV */}
-          <div className="flex-1 flex flex-col items-center text-center px-3">
-            <p className="text-xs font-sans font-medium text-fg-3 uppercase tracking-widest mb-1">SoLV</p>
-            <p className="text-xl font-sans font-semibold text-fg-1">{cur.solv.toFixed(1)}%</p>
-            <div className="h-4 flex items-center mt-0.5">
-              {!hasPrev
-                ? <span className="text-[10px] text-fg-3 italic font-sans">Insufficient data</span>
-                : serpDelta(cur.solv, prv?.solv ?? null) ?? <span className="text-xs text-fg-3">—</span>}
-            </div>
-            <p className="text-[11px] text-fg-3 font-sans mt-1">Share of local voice</p>
-          </div>
-          {/* Coverage */}
-          <div className="flex-1 flex flex-col items-center text-center px-3">
-            <p className="text-xs font-sans font-medium text-fg-3 uppercase tracking-widest mb-1">Coverage</p>
-            <p className="text-xl font-sans font-semibold text-fg-1">{cur.found_in} / {cur.data_points}</p>
-            <div className="h-4 flex items-center mt-0.5">
-              {!hasPrev
-                ? <span className="text-[10px] text-fg-3 italic font-sans">Insufficient data</span>
-                : serpDelta(cur.found_in, prv?.found_in ?? null) ?? <span className="text-xs text-fg-3">—</span>}
-            </div>
-            <p className="text-[11px] text-fg-3 font-sans mt-1">Grid points ranked</p>
-          </div>
+          <p className="text-[11px] text-fg-3 font-sans mt-1">Across ranked grid points</p>
         </div>
-      )}
+        <div className="flex-1 flex flex-col items-center text-center px-3">
+          <p className="text-xs font-sans font-medium text-fg-3 uppercase tracking-widest mb-1">Top 3</p>
+          <p className="text-xl font-sans font-semibold text-fg-1">{top3}</p>
+          <div className="h-4 flex items-center mt-0.5">
+            {!hasPrev
+              ? <span className="text-[10px] text-fg-3 italic font-sans">No prior scan</span>
+              : serpDelta(stats.top3, stats.prevTop3) ?? <span className="text-xs text-fg-3">—</span>}
+          </div>
+          <p className="text-[11px] text-fg-3 font-sans mt-1">Grid points in the top 3</p>
+        </div>
+        <div className="flex-1 flex flex-col items-center text-center px-3">
+          <p className="text-xs font-sans font-medium text-fg-3 uppercase tracking-widest mb-1">Coverage</p>
+          <p className="text-xl font-sans font-semibold text-fg-1">
+            {stats.rankedCount} / {gridData.length}
+          </p>
+          <div className="h-4 flex items-center mt-0.5">
+            {!hasPrev
+              ? <span className="text-[10px] text-fg-3 italic font-sans">No prior scan</span>
+              : serpDelta(stats.rankedCount, stats.prevRankedCount) ?? <span className="text-xs text-fg-3">—</span>}
+          </div>
+          <p className="text-[11px] text-fg-3 font-sans mt-1">Grid points ranked at all</p>
+        </div>
+      </div>
     </div>
   );
 }
