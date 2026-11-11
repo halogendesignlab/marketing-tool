@@ -72,5 +72,8 @@
       "name": "Moorhouse Homes Team"
     }
   ],
-  "media_category": "Houses"
+  "media_category": "Houses",
+  "gsc": {
+    "site_url": "https://www.moorhouse-homes.com/"
+  }
 }
