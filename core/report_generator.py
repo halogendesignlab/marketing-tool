@@ -14,8 +14,21 @@ from portal.api.models import (
 logger = logging.getLogger(__name__)
 
 
-def generate_monthly_report(config: ClientConfig, month: int, year: int) -> dict:
-    """Compile a monthly report and save to DB. Returns the report data dict."""
+def generate_monthly_report(
+    config: ClientConfig,
+    month: int,
+    year: int,
+    label_month: int | None = None,
+    label_year: int | None = None,
+) -> dict:
+    """Compile a monthly report and save to DB. Returns the report data dict.
+
+    `month`/`year` set the window the data is measured over. `label_month`/
+    `label_year` set the period the report is filed under, and default to the
+    measured month. They differ because reports are named for the month they go
+    out in rather than the month they cover: the report produced on 1 December
+    measures November and is filed as December.
+    """
     db = SessionLocal()
 
     try:
@@ -160,10 +173,13 @@ def generate_monthly_report(config: ClientConfig, month: int, year: int) -> dict
         }
 
         # Upsert — replace existing report for same period if present
+        p_month = label_month or month
+        p_year = label_year or year
+
         existing = db.query(Report).filter(
             Report.client_id == client.id,
-            Report.period_year == year,
-            Report.period_month == month,
+            Report.period_year == p_year,
+            Report.period_month == p_month,
         ).first()
 
         now = datetime.now(timezone.utc)
@@ -173,14 +189,16 @@ def generate_monthly_report(config: ClientConfig, month: int, year: int) -> dict
         else:
             db.add(Report(
                 client_id=client.id,
-                period_year=year,
-                period_month=month,
+                period_year=p_year,
+                period_month=p_month,
                 data=data,
                 generated_at=now,
             ))
 
         db.commit()
-        logger.info(f"[{config.client_id}] Report generated for {month}/{year}")
+        logger.info(
+            f"[{config.client_id}] Report filed as {p_month}/{p_year}, covering {month}/{year}"
+        )
         return data
 
     except Exception as e:

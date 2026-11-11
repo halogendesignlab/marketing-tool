@@ -122,10 +122,15 @@ def publish_approved_content_job(client_id: str):
                 db.commit()
 
                 if item.content_type == ContentType.social_caption and item.platform:
+                    # meta.platforms is the full set; item.platform is only the
+                    # primary. Publishing from the portal already honoured this,
+                    # so the same post reached one network or three depending on
+                    # whether it went out immediately or via this sweep.
+                    publish_platforms = (item.meta or {}).get("platforms") or [item.platform.value]
                     result = publish_social_post(
                         config=config,
                         body=item.body,
-                        platforms=[item.platform.value],
+                        platforms=publish_platforms,
                         image_url=item.image_url,
                         scheduled_for=item.scheduled_for,
                     )
@@ -288,18 +293,20 @@ def generate_report_job(client_id: str):
 
     config = load_client_config(client_id)
     now = datetime.now(timezone.utc)
-    # Report covers the previous month
+    # Measures the month just finished, but is filed under the month it goes out
+    # in — the report produced on 1 December covers November and is named
+    # December.
     month = now.month - 1 if now.month > 1 else 12
     year = now.year if now.month > 1 else now.year - 1
 
     try:
-        generate_monthly_report(config, month, year)
+        generate_monthly_report(config, month, year, label_month=now.month, label_year=now.year)
         try:
             send_report_ready(
                 to=config.notifications.admin_email,
                 brand_name=config.brand_name,
-                month=month,
-                year=year,
+                month=now.month,
+                year=now.year,
             )
         except Exception:
             pass
