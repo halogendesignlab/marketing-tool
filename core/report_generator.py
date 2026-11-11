@@ -118,6 +118,14 @@ def generate_monthly_report(
         if (baseline_year, baseline_month) == (year, month):
             baseline_year = baseline_month = None
 
+        def _first_scan_for(keyword: str) -> SerpResult | None:
+            """A keyword's own earliest scan. The tracked set changes over time,
+            so a keyword added later has no data at the client-wide baseline."""
+            return db.query(SerpResult).filter(
+                SerpResult.client_id == client.id,
+                SerpResult.keyword == keyword,
+            ).order_by(SerpResult.period_year, SerpResult.period_month).first()
+
         serp_section = []
         for sr in serp_results:
             # Newest first, so a keyword scanned more than once in a month
@@ -133,20 +141,24 @@ def generate_monthly_report(
                 prev_serp.grid_data if prev_serp else None,
             )
 
-            base_serp = None
-            if baseline_year:
-                base_serp = db.query(SerpResult).filter(
-                    SerpResult.client_id == client.id,
-                    SerpResult.keyword == sr.keyword,
-                    SerpResult.period_year == baseline_year,
-                    SerpResult.period_month == baseline_month,
-                ).order_by(SerpResult.id.desc()).first()
+            # Compare against this keyword's own first scan, which may be later
+            # than the client's baseline if it was added to the tracked set.
+            base_serp = _first_scan_for(sr.keyword)
+            if base_serp and (base_serp.period_year, base_serp.period_month) == (year, month):
+                base_serp = None
 
             serp_section.append({
                 "keyword": sr.keyword,
                 "grid_data": attach_baseline_ranks(
                     grid_with_trends,
                     base_serp.grid_data if base_serp else None,
+                ),
+                # When the scan was actually taken, so the report can say so
+                # rather than implying every figure is from this month.
+                "scanned_at": sr.checked_at.isoformat() if sr.checked_at else None,
+                "baseline_scanned_at": (
+                    base_serp.checked_at.isoformat()
+                    if base_serp and base_serp.checked_at else None
                 ),
             })
 
@@ -282,16 +294,36 @@ def _run_serp_checks_localfalcon(
         if not client:
             return
 
+        # Only scans actually taken in the period being recorded are stored.
+        # Local Falcon returns its newest scan per keyword whether or not that
+        # is recent, so a keyword that stopped being scanned used to have one
+        # old result filed under every subsequent month and compared against
+        # itself as "no change".
+        stored, skipped = 0, []
+        period_start = datetime(year, month, 1, tzinfo=timezone.utc)
+
         for scan in scans:
             if not scan["grid_data"]:
                 continue
-            _upsert_serp_result(db, client.id, scan["keyword"], scan["grid_data"], year, month)
+            scanned_at = parse_scan_date(scan.get("scan_date"))
+            if scanned_at and scanned_at < period_start:
+                skipped.append(f"{scan['keyword']} (last scanned {scanned_at:%Y-%m-%d})")
+                continue
+            _upsert_serp_result(
+                db, client.id, scan["keyword"], scan["grid_data"], year, month, scanned_at,
+            )
+            stored += 1
 
         db.commit()
         logger.info(
             f"[{config.client_id}] Local Falcon SERP checks stored: "
-            f"{len(scans)} keyword(s) for {month}/{year}"
+            f"{stored} keyword(s) for {month}/{year}"
         )
+        if skipped:
+            logger.warning(
+                f"[{config.client_id}] No scan this period for {len(skipped)} keyword(s): "
+                + "; ".join(skipped)
+            )
     except Exception as e:
         logger.error(f"[{config.client_id}] Local Falcon SERP storage failed: {e}")
         db.rollback()
@@ -299,9 +331,30 @@ def _run_serp_checks_localfalcon(
         db.close()
 
 
-def _upsert_serp_result(db, client_id: int, keyword: str, grid_data: list, year: int, month: int) -> None:
-    """Insert or update a SerpResult row."""
-    now = datetime.now(timezone.utc)
+def parse_scan_date(raw: str | None) -> datetime | None:
+    """Local Falcon's scan date, e.g. "11/10/2026 10:25 PM", as UTC."""
+    if not raw:
+        return None
+    for fmt in ("%m/%d/%Y %I:%M %p", "%m/%d/%Y %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(raw.strip(), fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    logger.warning(f"Local Falcon: unrecognised scan date {raw!r}")
+    return None
+
+
+def _upsert_serp_result(
+    db, client_id: int, keyword: str, grid_data: list, year: int, month: int,
+    scanned_at: datetime | None = None,
+) -> None:
+    """Insert or update a SerpResult row.
+
+    checked_at records when the scan was actually taken, not when we read it.
+    The two diverge whenever Local Falcon has no new scan for a keyword, and
+    storing the read time made four-month-old data look current.
+    """
+    stamp = scanned_at or datetime.now(timezone.utc)
     existing = db.query(SerpResult).filter(
         SerpResult.client_id == client_id,
         SerpResult.keyword == keyword,
@@ -311,7 +364,7 @@ def _upsert_serp_result(db, client_id: int, keyword: str, grid_data: list, year:
 
     if existing:
         existing.grid_data = grid_data
-        existing.checked_at = now
+        existing.checked_at = stamp
     else:
         db.add(SerpResult(
             client_id=client_id,
@@ -319,5 +372,5 @@ def _upsert_serp_result(db, client_id: int, keyword: str, grid_data: list, year:
             grid_data=grid_data,
             period_year=year,
             period_month=month,
-            checked_at=now,
+            checked_at=stamp,
         ))
